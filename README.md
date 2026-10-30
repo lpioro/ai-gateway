@@ -50,6 +50,10 @@ docker compose -f deploy/compose.ghcr.yaml up -d
 
 GHCR package visibility must be changed to public separately if anonymous pulls are desired. Docker inside LXC needs appropriate nesting configuration and host security review; a Proxmox VM is the more isolated option.
 
+## Local Context Engine
+
+Project-scoped, approval-gated local memory using SQLite FTS5: select a project, propose facts, approve/reject them, and preview exactly which relevant approved notes may be sent to the chosen model. No pending facts are sent. See [context engine documentation](deploy/CONTEXT.md). Cloud providers receive the selected context with your question; use Local Only for private inference.
+
 ## API
 
 - `GET /healthz` — basic health check
