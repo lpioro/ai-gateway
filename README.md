@@ -13,6 +13,19 @@ Public open-source self-hosted AI chat gateway. UI and conversation database rem
 
 **Security warning:** This is an MVP prototype. The UI sends a shared password in a request header. Do not expose directly to the Internet or untrusted LAN. Use a strong password, TLS behind a proxy, firewall rules and stronger session authentication before multi-user deployment.
 
+## Install natively in Proxmox LXC (no Docker)
+
+Use the native installer on Debian/Ubuntu inside your existing LXC:
+
+```bash
+apt-get update && apt-get install -y git
+git clone https://github.com/lpioro/ai-gateway.git /root/ai-gateway-src
+cd /root/ai-gateway-src
+bash scripts/install-lxc.sh
+```
+
+It configures a Python virtual environment, a dedicated system user, SQLite persistence in `/var/lib/ai-gateway`, settings in `/etc/ai-gateway/gateway.env` and a systemd service. Default bind is loopback only. GitHub Actions also provides a downloadable native `tar.gz` package. See [full LXC instructions](deploy/LXC.md).
+
 ## Run locally with Docker
 
 ```bash
