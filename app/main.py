@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from app import context as memory
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent
@@ -33,6 +34,7 @@ def init_db():
     with conn() as c:
         c.execute("CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         c.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        memory.setup(c)
 
 @asynccontextmanager
 async def lifespan(app):
@@ -54,6 +56,8 @@ class ChatRequest(BaseModel):
     provider: str = "ollama"
     message: str = Field(min_length=1, max_length=25000)
     local_only: bool = False
+    project_id: str | None = None
+    use_context: bool = True
 
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
@@ -88,6 +92,70 @@ async def delete_chat(chat_id: str):
         c.execute("DELETE FROM chats WHERE id=?", (chat_id,))
     return {"deleted": True}
 
+
+class ProjectCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+class FactCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    source: str = Field(default="manual", max_length=120)
+
+class FactReview(BaseModel):
+    status: str
+
+class ContextPreview(BaseModel):
+    project_id: str
+    question: str = Field(min_length=1, max_length=25000)
+
+@app.get("/api/projects", dependencies=[Depends(authenticated)])
+async def list_projects():
+    with conn() as c:
+        return [dict(row) for row in c.execute("SELECT id,name,created_at FROM projects ORDER BY created_at DESC")]
+
+@app.post("/api/projects", dependencies=[Depends(authenticated)], status_code=201)
+async def new_project(req: ProjectCreate):
+    with conn() as c:
+        pid=memory.create_project(c,req.name)
+    return {"id":pid,"name":req.name.strip()}
+
+@app.get("/api/projects/{project_id}/facts", dependencies=[Depends(authenticated)])
+async def facts(project_id: str):
+    with conn() as c:
+        if not memory.project_exists(c,project_id):
+            raise HTTPException(404,"Project not found")
+        return memory.fetch_facts(c,project_id)
+
+@app.post("/api/projects/{project_id}/facts", dependencies=[Depends(authenticated)], status_code=201)
+async def propose_fact(project_id: str, req: FactCreate):
+    with conn() as c:
+        if not memory.project_exists(c,project_id):
+            raise HTTPException(404,"Project not found")
+        fid=memory.create_fact(c,project_id,req.body,req.source)
+    return {"id":fid,"status":"pending"}
+
+@app.patch("/api/projects/{project_id}/facts/{fact_id}", dependencies=[Depends(authenticated)])
+async def review_fact(project_id: str, fact_id: str, req: FactReview):
+    if req.status not in ("approved","rejected","pending"):
+        raise HTTPException(400,"Unknown review status")
+    with conn() as c:
+        if not memory.set_fact_status(c,project_id,fact_id,req.status):
+            raise HTTPException(404,"Fact not found")
+    return {"id":fact_id,"status":req.status}
+
+@app.delete("/api/projects/{project_id}/facts/{fact_id}", dependencies=[Depends(authenticated)])
+async def delete_fact(project_id: str, fact_id: str):
+    with conn() as c:
+        if not memory.remove_fact(c,project_id,fact_id):
+            raise HTTPException(404,"Fact not found")
+    return {"deleted":True}
+
+@app.post("/api/context/preview", dependencies=[Depends(authenticated)])
+async def preview_context(req: ContextPreview):
+    with conn() as c:
+        if not memory.project_exists(c,req.project_id):
+            raise HTTPException(404,"Project not found")
+        return memory.build_context(c,req.project_id,req.question)
+
 @app.post("/api/chat", dependencies=[Depends(authenticated)])
 async def chat(req: ChatRequest):
     if req.provider not in PROVIDERS:
@@ -98,6 +166,12 @@ async def chat(req: ChatRequest):
     key = os.getenv(cfg["key"]) if cfg["key"] else "local"
     if not key:
         raise HTTPException(400, "Provider API key not configured")
+    context_message = None
+    if req.project_id and req.use_context:
+        with conn() as c:
+            if not memory.project_exists(c,req.project_id):
+                raise HTTPException(404,"Project not found")
+            context_message=memory.build_context(c,req.project_id,req.message)["system_message"]
     cid = req.chat_id or str(uuid.uuid4())
     with conn() as c:
         exists = c.execute("SELECT 1 FROM chats WHERE id=?", (cid,)).fetchone()
@@ -109,6 +183,8 @@ async def chat(req: ChatRequest):
         history.reverse()
         c.execute("INSERT INTO messages(chat_id,role,content) VALUES(?,?,?)", (cid, "user", req.message))
     history.append({"role": "user", "content": req.message})
+    if context_message:
+        history.insert(0, {"role":"system","content":context_message})
 
     async def stream():
         yield "data: " + json.dumps({"type": "chat_id", "chat_id": cid}) + "\n\n"
