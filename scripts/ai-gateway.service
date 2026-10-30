@@ -1,0 +1,30 @@
+[Unit]
+Description=AI Gateway LAN (native Python)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ai-gateway
+Group=ai-gateway
+WorkingDirectory=/opt/ai-gateway
+EnvironmentFile=/etc/ai-gateway/gateway.env
+ExecStart=/opt/ai-gateway/.venv/bin/uvicorn app.main:app --host ${LAN_BIND_IP} --port ${LAN_PORT} --proxy-headers=false
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/ai-gateway
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
