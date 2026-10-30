@@ -1,0 +1,17 @@
+services:
+  ai-gateway:
+    image: ghcr.io/lpioro/ai-gateway:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${LAN_BIND_IP:-127.0.0.1}:${LAN_PORT:-8080}:8080"
+    volumes:
+      - gateway_data:/data
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,noexec,size=32m"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+volumes:
+  gateway_data:
