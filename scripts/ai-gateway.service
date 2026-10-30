@@ -9,7 +9,7 @@ User=ai-gateway
 Group=ai-gateway
 WorkingDirectory=/opt/ai-gateway
 EnvironmentFile=/etc/ai-gateway/gateway.env
-ExecStart=/opt/ai-gateway/.venv/bin/uvicorn app.main:app --host ${LAN_BIND_IP} --port ${LAN_PORT} --proxy-headers=false
+ExecStart=/opt/ai-gateway/.venv/bin/uvicorn app.main:app --host ${LAN_BIND_IP} --port ${LAN_PORT} --no-proxy-headers
 Restart=on-failure
 RestartSec=5
 UMask=0077
