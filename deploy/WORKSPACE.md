@@ -1,6 +1,6 @@
-# AI Gateway 1.0 — Workspace UI (first iteration)
+# AI Gateway 1.0 — PI-LAB Workspace
 
-## Implemented in this branch
+## Available in main
 
 - Chat-first responsive layout with sidebar navigation and a compact toolbar.
 - Four selectable color schemes: Graphite, Paper, PI-LAB Blue and Forest.
@@ -37,7 +37,7 @@
 - In Observability, check counts update after refresh.
 - On a narrow screen, open sidebar via menu icon and navigate.
 
-## User profiles and sidebar connection (next iteration)
+## User profiles and sidebar connection (implemented)
 
 - Profiles are **workspace personas, not security accounts**. All profiles share the existing gateway password and database access; do not use them to isolate private data between independent users.
 - Profiles have a name, preferred provider, visual theme and optional instructions for LLM answers.
@@ -51,3 +51,29 @@
 ### Deployment
 
 This modifies the SQLite schema additively on startup. Back up the DB before updating native LXC. Existing conversations remain and are associated with the default workspace profile.
+
+
+## Profiles: typical workflow
+
+1. Expand **Połączenie Gateway** in the left sidebar, enter the existing gateway password, and click **Połącz**.
+2. Select **Zarządzaj profilami** and create a profile such as `Programista` or `Analityk`.
+3. Define its name, preferred provider, theme and response instructions. Click **Zapisz profil**.
+4. Pick the profile in the sidebar selector. Only its linked conversations appear in the history list.
+5. New conversations will be assigned to that profile, and its instructions will accompany the question sent to the model.
+
+All pre-existing conversations are assigned to the `default` profile on the first startup after upgrade. This is an additive SQLite migration, not a destructive reset.
+
+### Important caveats
+
+- **Not multi-user authentication:** anyone with the gateway password can switch profiles. Projects, facts and conversation read/delete endpoints are not protected by per-profile authorization; the filtered list is a UI convenience.
+- Model preferences are not per-profile provider credentials. The API keys remain server-owned in the gateway environment configuration.
+- Model selection depends on whether the preferred provider is configured and permitted by Local Only mode.
+- The theme selection in browser settings and profile switching may override each other; profile selection applies its stored theme.
+- Profile deletion is not implemented.
+- No real RAG ingestion, provider wizard, secure credential vault, or detailed model traces exist yet.
+
+### Deployment checklist
+
+Back up the SQLite file **with the service stopped** before upgrading. Update the git checkout and rerun the native installer described in [LXC.md](LXC.md). Verify `/api/profiles`, switch between two profiles, and confirm that existing chats still appear in **Domyślny**. Use a controlled LAN or HTTPS reverse proxy; the shared-password mechanism is not sufficient for public access.
+
+See [PROFILES.md](PROFILES.md) for API examples, data model and troubleshooting.
