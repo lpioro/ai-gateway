@@ -14,7 +14,7 @@ body{margin:0;display:flex;height:100dvh;overflow:hidden;background:var(--bg);co
 button,select,input,textarea{font:inherit}button{cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#sidebar{width:264px;flex:none;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;gap:12px;padding:17px 12px;transition:width .18s}
+#sidebar{width:264px;flex:none;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;gap:8px;padding:12px 12px;transition:width .18s;overflow-y:auto;min-height:0;scrollbar-gutter:stable}
 .brand{font-size:16px;font-weight:750;letter-spacing:-.4px;padding:8px 12px;display:flex;align-items:center;gap:10px}
 .brand i{color:var(--accent);font-size:22px}
 .navitem{display:flex;align-items:center;gap:12px;padding:11px 13px;width:100%;text-align:left;background:none;border:0;border-radius:10px;color:var(--text)}
@@ -22,10 +22,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .navitem:hover,.navitem.active{background:var(--surface2)}
 .navitem.active i{color:var(--accent)}
 .nav-caption{color:var(--muted);font-size:10px;font-weight:750;letter-spacing:1.3px;margin:12px 13px 3px}
-#chats{overflow-y:auto;flex:1;min-height:45px}
+#chats{overflow-y:auto;flex:1 0 80px;min-height:45px;max-height:40vh}
 .chat{background:none;color:var(--muted);text-align:left;border:0;border-radius:9px;padding:9px 13px;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat:hover{background:var(--surface2);color:var(--text)}
-.sidebar-footer{border-top:1px solid var(--border);padding:12px;color:var(--muted);font-size:12px}
+.sidebar-footer{border-top:1px solid var(--border);padding:12px;color:var(--muted);font-size:12px;flex-shrink:0}
 #workspace{display:flex;flex:1;min-width:0;flex-direction:column}
 .topbar{min-height:66px;padding:12px 23px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--border)}
 .titlebar{display:flex;align-items:center;gap:12px;min-width:0}
@@ -41,7 +41,7 @@ button.secondary:hover{background:var(--surface2)}
 .icon-btn:hover{background:var(--surface2);color:var(--text)}
 #password{width:100%}
 #profilePicker{width:100%;max-width:100%}
-#connectionPanel{border-top:1px solid var(--border);padding:10px 3px 0}
+#connectionPanel{border-top:1px solid var(--border);padding:10px 3px 0;flex-shrink:0}
 #connectionPanel summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;color:var(--muted);padding:8px 10px;border-radius:8px}
 #connectionPanel summary:hover{background:var(--surface2)}
 #connectionPanel summary::-webkit-details-marker{display:none}
@@ -112,7 +112,7 @@ button.secondary:hover{background:var(--surface2)}
   <div class="profile-block">
     <label for="profilePicker" class="muted" style="font-size:11px">Aktywny profil</label>
     <select id="profilePicker" aria-label="Aktywny profil"><option value="default">Domyślny</option></select>
-    <button id="profilesNav" data-view="profiles" class="secondary"><i class="bi bi-person-gear"></i> Zarządzaj profilami</button>
+    <button id="profilesNav" data-view="profiles" class="secondary" type="button"><i class="bi bi-person-plus"></i> Utwórz / edytuj profil</button>
   </div>
   <div class="nav-caption">WORKSPACE</div>
   <button class="navitem active" data-view="chat"><i class="bi bi-chat-square-dots" aria-hidden="true"></i> Rozmowy</button>
@@ -165,7 +165,7 @@ button.secondary:hover{background:var(--surface2)}
     <p class="lead">Osobne preferencje rozmowy i historia dla każdego profilu. Profile nie są kontami z osobnym logowaniem — wszystkie korzystają z obecnego hasła Gateway.</p>
     <div class="panel">
       <h2>Nowy profil</h2>
-      <div class="row"><input id="newProfileName" placeholder="np. Programista, Analityk" maxlength="80"><button id="createProfile" class="secondary"><i class="bi bi-person-plus"></i> Utwórz</button></div>
+      <div class="row"><input id="newProfileName" placeholder="np. Programista, Analityk" maxlength="80"><button id="createProfile" class="secondary" type="button"><i class="bi bi-person-plus"></i> Utwórz</button></div>
     </div>
     <div class="panel" id="profileSettings">
       <h2>Ustawienia wybranego profilu</h2>
@@ -327,12 +327,15 @@ $('profilePicker').onchange=async()=>{
  switchView('chat')
 };
 $('createProfile').onclick=async()=>{
- const name=$('newProfileName').value.trim();if(!name)return;
+ const name=$('newProfileName').value.trim();if(!name){$('profileFeedback').textContent='Podaj nazwę profilu.';return}
+ if(!$('password').value){$('profileFeedback').textContent='Najpierw połącz się z Gateway w lewym panelu.';$('connectionPanel').open=true;return}
+ try{
  const r=await api('/api/profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
- if(!r.ok){$('profileFeedback').textContent='Nie udało się utworzyć profilu: '+r.status;return}
+ if(!r.ok){$('profileFeedback').textContent=r.status===401?'Błędne hasło. Połącz się ponownie.':'Nie udało się utworzyć profilu: HTTP '+r.status;return}
  const p=await r.json();await loadProfiles(p.id);$('newProfileName').value='';
  cid=null;await list();reset();switchView('profiles');
  $('profileFeedback').textContent='Profil utworzony'
+ }catch(e){$('profileFeedback').textContent='Błąd tworzenia profilu: '+e.message}
 };
 $('saveProfile').onclick=async()=>{
  const id=$('profilePicker').value;
