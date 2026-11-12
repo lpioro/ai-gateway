@@ -45,7 +45,7 @@ def init_db():
         c.execute("INSERT OR IGNORE INTO user_profiles(id,name) VALUES('default','Domyślny')")
         if not any(col[1] == "profile_id" for col in c.execute("PRAGMA table_info(chats)")):
             c.execute("ALTER TABLE chats ADD COLUMN profile_id TEXT NOT NULL DEFAULT 'default'")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_chats_profile ON chats(profile_id,created_at)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_chats_profile ON chats(profile_id,created_at)")
 
 @asynccontextmanager
 async def lifespan(app):
