@@ -139,8 +139,15 @@ async def observability_summary():
         }
 
 @app.get("/api/chats", dependencies=[Depends(authenticated)])
-async def chats():
+async def chats(profile_id: str | None = Query(default=None)):
     with conn() as c:
+        if profile_id is not None:
+            if not c.execute("SELECT 1 FROM user_profiles WHERE id=?", (profile_id,)).fetchone():
+                raise HTTPException(404,"Profile not found")
+            return [dict(r) for r in c.execute(
+                "SELECT * FROM chats WHERE profile_id=? ORDER BY created_at DESC, rowid DESC LIMIT 100",
+                (profile_id,)
+            )]
         return [dict(r) for r in c.execute("SELECT * FROM chats ORDER BY created_at DESC, rowid DESC LIMIT 100")]
 
 @app.get("/api/chats/{chat_id}", dependencies=[Depends(authenticated)])
@@ -239,19 +246,30 @@ async def chat(req: ChatRequest):
             if not memory.project_exists(c,req.project_id):
                 raise HTTPException(404,"Project not found")
             context_message=memory.build_context(c,req.project_id,req.message)["system_message"]
+    with conn() as c:
+        profile = c.execute(
+            "SELECT instructions FROM user_profiles WHERE id=?", (req.profile_id,)
+        ).fetchone()
+        if profile is None:
+            raise HTTPException(404,"Profile not found")
+        instructions = profile["instructions"]
     cid = req.chat_id or str(uuid.uuid4())
     with conn() as c:
-        exists = c.execute("SELECT 1 FROM chats WHERE id=?", (cid,)).fetchone()
+        exists = c.execute("SELECT profile_id FROM chats WHERE id=?", (cid,)).fetchone()
+        if exists and exists["profile_id"] != req.profile_id:
+            raise HTTPException(409,"Chat belongs to a different profile")
         if req.chat_id and not exists:
             raise HTTPException(404, "Chat not found")
         if not exists:
-            c.execute("INSERT INTO chats(id,title) VALUES(?,?)", (cid, req.message[:75]))
+            c.execute("INSERT INTO chats(id,title,profile_id) VALUES(?,?,?)", (cid, req.message[:75],req.profile_id))
         history = [dict(r) for r in c.execute("SELECT role,content FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT 40", (cid,))]
         history.reverse()
         c.execute("INSERT INTO messages(chat_id,role,content) VALUES(?,?,?)", (cid, "user", req.message))
     history.append({"role": "user", "content": req.message})
     if context_message:
         history.insert(0, {"role":"system","content":context_message})
+    if instructions:
+        history.insert(0, {"role":"system","content":"Preferencje aktywnego profilu użytkownika (instrukcje):\n"+instructions})
 
     async def stream():
         yield "data: " + json.dumps({"type": "chat_id", "chat_id": cid}) + "\n\n"
