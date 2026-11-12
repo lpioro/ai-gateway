@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -35,6 +35,17 @@ def init_db():
         c.execute("CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         c.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         memory.setup(c)
+        c.execute("""CREATE TABLE IF NOT EXISTS user_profiles (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL,
+            instructions TEXT NOT NULL DEFAULT '',
+            preferred_provider TEXT NOT NULL DEFAULT 'openai',
+            theme TEXT NOT NULL DEFAULT 'graphite',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""")
+        c.execute("INSERT OR IGNORE INTO user_profiles(id,name) VALUES('default','Domyślny')")
+        if not any(col[1] == "profile_id" for col in c.execute("PRAGMA table_info(chats)")):
+            c.execute("ALTER TABLE chats ADD COLUMN profile_id TEXT NOT NULL DEFAULT 'default'")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_chats_profile ON chats(profile_id,created_at)")
 
 @asynccontextmanager
 async def lifespan(app):
@@ -58,6 +69,7 @@ class ChatRequest(BaseModel):
     local_only: bool = False
     project_id: str | None = None
     use_context: bool = True
+    profile_id: str = 'default'
 
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
@@ -70,6 +82,47 @@ async def index():
 @app.get("/api/models", dependencies=[Depends(authenticated)])
 async def models():
     return [{"provider": name, "model": p["model"], "configured": bool(os.getenv(p["key"])) if p["key"] else True} for name, p in PROVIDERS.items()]
+
+class ProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+class ProfileUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    instructions: str = Field(default="", max_length=3000)
+    preferred_provider: str = "openai"
+    theme: str = "graphite"
+
+THEMES = {"graphite","paper","blue","forest"}
+
+@app.get("/api/profiles", dependencies=[Depends(authenticated)])
+async def profiles():
+    with conn() as db:
+        return [dict(row) for row in db.execute(
+            "SELECT id,name,instructions,preferred_provider,theme FROM user_profiles ORDER BY created_at,id"
+        )]
+
+@app.post("/api/profiles", dependencies=[Depends(authenticated)], status_code=201)
+async def create_profile(req: ProfileCreate):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(422,"Profile name cannot be blank")
+    pid = str(uuid.uuid4())
+    with conn() as db:
+        db.execute("INSERT INTO user_profiles(id,name) VALUES(?,?)",(pid,name))
+    return {"id":pid,"name":name,"instructions":"","preferred_provider":"openai","theme":"graphite"}
+
+@app.put("/api/profiles/{profile_id}", dependencies=[Depends(authenticated)])
+async def update_profile(profile_id: str, req: ProfileUpdate):
+    if req.preferred_provider not in PROVIDERS or req.theme not in THEMES or not req.name.strip():
+        raise HTTPException(422,"Invalid profile settings")
+    with conn() as db:
+        updated = db.execute(
+            "UPDATE user_profiles SET name=?,instructions=?,preferred_provider=?,theme=? WHERE id=?",
+            (req.name.strip(),req.instructions,req.preferred_provider,req.theme,profile_id)
+        )
+        if not updated.rowcount:
+            raise HTTPException(404,"Profile not found")
+    return {"id":profile_id,**req.model_dump(),"name":req.name.strip()}
 
 @app.get("/api/observability/summary", dependencies=[Depends(authenticated)])
 async def observability_summary():
@@ -86,8 +139,15 @@ async def observability_summary():
         }
 
 @app.get("/api/chats", dependencies=[Depends(authenticated)])
-async def chats():
+async def chats(profile_id: str | None = Query(default=None)):
     with conn() as c:
+        if profile_id is not None:
+            if not c.execute("SELECT 1 FROM user_profiles WHERE id=?", (profile_id,)).fetchone():
+                raise HTTPException(404,"Profile not found")
+            return [dict(r) for r in c.execute(
+                "SELECT * FROM chats WHERE profile_id=? ORDER BY created_at DESC, rowid DESC LIMIT 100",
+                (profile_id,)
+            )]
         return [dict(r) for r in c.execute("SELECT * FROM chats ORDER BY created_at DESC, rowid DESC LIMIT 100")]
 
 @app.get("/api/chats/{chat_id}", dependencies=[Depends(authenticated)])
@@ -186,19 +246,30 @@ async def chat(req: ChatRequest):
             if not memory.project_exists(c,req.project_id):
                 raise HTTPException(404,"Project not found")
             context_message=memory.build_context(c,req.project_id,req.message)["system_message"]
+    with conn() as c:
+        profile = c.execute(
+            "SELECT instructions FROM user_profiles WHERE id=?", (req.profile_id,)
+        ).fetchone()
+        if profile is None:
+            raise HTTPException(404,"Profile not found")
+        instructions = profile["instructions"]
     cid = req.chat_id or str(uuid.uuid4())
     with conn() as c:
-        exists = c.execute("SELECT 1 FROM chats WHERE id=?", (cid,)).fetchone()
+        exists = c.execute("SELECT profile_id FROM chats WHERE id=?", (cid,)).fetchone()
+        if exists and exists["profile_id"] != req.profile_id:
+            raise HTTPException(409,"Chat belongs to a different profile")
         if req.chat_id and not exists:
             raise HTTPException(404, "Chat not found")
         if not exists:
-            c.execute("INSERT INTO chats(id,title) VALUES(?,?)", (cid, req.message[:75]))
+            c.execute("INSERT INTO chats(id,title,profile_id) VALUES(?,?,?)", (cid, req.message[:75],req.profile_id))
         history = [dict(r) for r in c.execute("SELECT role,content FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT 40", (cid,))]
         history.reverse()
         c.execute("INSERT INTO messages(chat_id,role,content) VALUES(?,?,?)", (cid, "user", req.message))
     history.append({"role": "user", "content": req.message})
     if context_message:
         history.insert(0, {"role":"system","content":context_message})
+    if instructions:
+        history.insert(0, {"role":"system","content":"Preferencje aktywnego profilu użytkownika (instrukcje):\n"+instructions})
 
     async def stream():
         yield "data: " + json.dumps({"type": "chat_id", "chat_id": cid}) + "\n\n"

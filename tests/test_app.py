@@ -55,3 +55,50 @@ def test_observability_requires_auth_and_counts():
         assert r.status_code == 200
         assert set(r.json()) == {"chats", "messages", "projects", "approved_facts", "pending_facts"}
         assert all(isinstance(v, int) and v >= 0 for v in r.json().values())
+
+
+def test_profiles_create_update_and_filter_chats(tmp_path, monkeypatch):
+    from app import main
+    monkeypatch.setattr(main, "DB", tmp_path / "profiles.db")
+    with TestClient(main.app) as client:
+        assert client.get("/api/profiles").status_code == 401
+        initial = client.get("/api/profiles", headers=HEADERS).json()
+        assert any(p["id"] == "default" for p in initial)
+        r = client.post("/api/profiles", headers=HEADERS, json={"name": "Programista"})
+        assert r.status_code == 201
+        pid = r.json()["id"]
+        profile = {"name": "Programista", "instructions": "Odpowiadaj zwięźle.",
+                   "preferred_provider": "openai", "theme": "blue"}
+        updated = client.put("/api/profiles/" + pid, headers=HEADERS, json=profile)
+        assert updated.status_code == 200
+        assert updated.json()["instructions"] == "Odpowiadaj zwięźle."
+        bad = client.put("/api/profiles/" + pid, headers=HEADERS,
+                         json={**profile, "preferred_provider": "not-real"})
+        assert bad.status_code == 422
+        with main.conn() as db:
+            db.execute("INSERT INTO chats(id,title,profile_id) VALUES(?,?,?)",
+                       ("profile-chat","Test",pid))
+            db.execute("INSERT INTO chats(id,title) VALUES(?,?)",
+                       ("legacy-chat","Legacy"))
+        own = client.get("/api/chats", params={"profile_id": pid}, headers=HEADERS)
+        assert own.status_code == 200
+        assert [chat["id"] for chat in own.json()] == ["profile-chat"]
+        legacy = client.get("/api/chats", params={"profile_id":"default"}, headers=HEADERS)
+        assert [chat["id"] for chat in legacy.json()] == ["legacy-chat"]
+        assert client.get("/api/chats", params={"profile_id":"unknown"}, headers=HEADERS).status_code == 404
+        # Existing chat cannot be continued under another profile.
+        other = client.post("/api/chat", headers=HEADERS,
+                            json={"chat_id":"profile-chat","profile_id":"default",
+                                  "provider":"ollama","message":"hello"})
+        assert other.status_code == 409
+
+
+def test_connection_moved_to_sidebar_and_profile_editor():
+    with TestClient(app) as client:
+        html = client.get("/").text
+        assert html.count('id="password"') == 1
+        assert html.count('id="connect"') == 1
+        assert 'id="connectionPanel"' in html
+        assert 'id="profilePicker"' in html
+        assert 'id="profilesView"' in html
+        assert 'id="profileInstructions"' in html

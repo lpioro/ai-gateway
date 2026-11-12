@@ -39,7 +39,19 @@ button.primary,button.secondary{border-radius:10px;padding:9px 13px}
 button.secondary:hover{background:var(--surface2)}
 .icon-btn{background:transparent;border:0;color:var(--muted);font-size:19px;border-radius:9px;padding:7px}
 .icon-btn:hover{background:var(--surface2);color:var(--text)}
-#password{width:130px}
+#password{width:100%}
+#profilePicker{width:100%;max-width:100%}
+#connectionPanel{border-top:1px solid var(--border);padding:10px 3px 0}
+#connectionPanel summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;color:var(--muted);padding:8px 10px;border-radius:8px}
+#connectionPanel summary:hover{background:var(--surface2)}
+#connectionPanel summary::-webkit-details-marker{display:none}
+.connection-fields{display:flex;flex-direction:column;gap:9px;padding:11px 7px}
+.connection-fields button{width:100%}
+#profileSummary{font-size:12px;color:var(--muted);padding:1px 12px}
+#sidebar .profile-block{padding:0 8px}
+#sidebar .profile-block .secondary{width:100%;margin-top:8px;text-align:left}
+#profileInstructions{width:100%;min-height:100px}
+#profileSettings .field input,#profileSettings .field select{width:100%;max-width:100%}
 #connectionStatus{font-size:12px;color:var(--muted)}
 .view{display:none;flex:1;min-height:0;overflow:auto}
 .view.active{display:flex;flex-direction:column}
@@ -96,6 +108,12 @@ button.secondary:hover{background:var(--surface2)}
 <aside id="sidebar" aria-label="Nawigacja">
   <div class="brand"><i class="bi bi-stars" aria-hidden="true"></i> PI-LAB <span class="muted">/ AI Gateway</span></div>
   <button class="navitem" id="new"><i class="bi bi-pencil-square" aria-hidden="true"></i> Nowa rozmowa</button>
+  <div class="nav-caption">PROFIL</div>
+  <div class="profile-block">
+    <label for="profilePicker" class="muted" style="font-size:11px">Aktywny profil</label>
+    <select id="profilePicker" aria-label="Aktywny profil"><option value="default">Domyślny</option></select>
+    <button id="profilesNav" data-view="profiles" class="secondary"><i class="bi bi-person-gear"></i> Zarządzaj profilami</button>
+  </div>
   <div class="nav-caption">WORKSPACE</div>
   <button class="navitem active" data-view="chat"><i class="bi bi-chat-square-dots" aria-hidden="true"></i> Rozmowy</button>
   <button class="navitem" data-view="memory" id="memoryToggle"><i class="bi bi-brain" aria-hidden="true"></i> Pamięć projektu</button>
@@ -106,7 +124,15 @@ button.secondary:hover{background:var(--surface2)}
   <button class="navitem" data-view="settings"><i class="bi bi-sliders" aria-hidden="true"></i> Ustawienia</button>
   <div class="nav-caption">HISTORIA</div>
   <div id="chats"></div>
-  <div class="sidebar-footer"><i class="bi bi-hdd-network" aria-hidden="true"></i> LAN · historia w lokalnym SQLite</div>
+  <details id="connectionPanel">
+    <summary><i class="bi bi-plug" aria-hidden="true"></i> Połączenie Gateway <span class="pill" id="sidebarConnectionState">Offline</span></summary>
+    <div class="connection-fields">
+      <label for="password" class="muted">Hasło Gateway</label>
+      <input id="password" type="password" placeholder="Hasło" autocomplete="off" aria-label="Hasło gateway">
+      <button id="connect" class="secondary"><i class="bi bi-box-arrow-in-right"></i> Połącz</button>
+    </div>
+  </details>
+  <div class="sidebar-footer"><i class="bi bi-hdd-network" aria-hidden="true"></i> LAN · lokalna historia</div>
 </aside>
 <main id="workspace">
   <header class="topbar">
@@ -114,8 +140,7 @@ button.secondary:hover{background:var(--surface2)}
     <div class="toolbar">
       <select id="model" aria-label="Model"><option value="ollama">Ollama</option></select>
       <select id="project" aria-label="Projekt"><option value="">Bez projektu</option></select>
-      <input id="password" type="password" placeholder="Hasło" autocomplete="off" aria-label="Hasło gateway">
-      <button id="connect" class="secondary">Połącz</button>
+      
     </div>
   </header>
   <section class="view active" id="chatView">
@@ -135,22 +160,45 @@ button.secondary:hover{background:var(--surface2)}
     <div class="panel"><h2>Projekty i fakty</h2><div class="field"><label for="newProjectName">Nazwa nowego projektu</label><input id="newProjectName" placeholder="np. AI Gateway"></div><button class="secondary" id="addProject">Utwórz projekt</button><div class="field" style="margin-top:18px"><label for="factText">Nowy fakt do weryfikacji</label><textarea id="factText" rows="2" placeholder="Wpisz sprawdzoną informację…"></textarea></div><button class="secondary" id="addFact">Zaproponuj fakt</button><div id="facts"></div></div>
     <div class="panel"><h2>Podgląd kontekstu</h2><p class="muted">Wpisz poniżej pytanie, aby sprawdzić dobór faktów. Podgląd nie wysyła nic do dostawcy AI.</p><div class="field"><label for="contextQuestion">Pytanie testowe</label><textarea id="contextQuestion" rows="2" placeholder="Jak uruchamiamy gateway?"></textarea></div><button class="secondary" id="previewContext">Zobacz dołączany kontekst</button><div id="contextPreview">Wybierz projekt i wpisz pytanie.</div></div>
   </div></section>
+  <section class="view" id="profilesView"><div class="content">
+    <h1>Profile użytkownika</h1>
+    <p class="lead">Osobne preferencje rozmowy i historia dla każdego profilu. Profile nie są kontami z osobnym logowaniem — wszystkie korzystają z obecnego hasła Gateway.</p>
+    <div class="panel">
+      <h2>Nowy profil</h2>
+      <div class="row"><input id="newProfileName" placeholder="np. Programista, Analityk" maxlength="80"><button id="createProfile" class="secondary"><i class="bi bi-person-plus"></i> Utwórz</button></div>
+    </div>
+    <div class="panel" id="profileSettings">
+      <h2>Ustawienia wybranego profilu</h2>
+      <div class="field"><label for="profileName">Nazwa</label><input id="profileName" maxlength="80"></div>
+      <div class="field"><label for="profileProvider">Preferowany dostawca</label>
+        <select id="profileProvider"><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="groq">Groq</option><option value="ollama">Ollama</option></select>
+      </div>
+      <div class="field"><label for="profileTheme">Kolorystyka profilu</label>
+        <select id="profileTheme"><option value="graphite">Graphite</option><option value="paper">Paper</option><option value="blue">PI-LAB Blue</option><option value="forest">Forest</option></select>
+      </div>
+      <div class="field"><label for="profileInstructions">Instrukcje odpowiedzi (maks. 3000 znaków)</label>
+        <textarea id="profileInstructions" maxlength="3000" placeholder="np. Odpowiadaj po polsku, krótko, z przykładami kodu."></textarea>
+      </div>
+      <button id="saveProfile" class="primary">Zapisz profil</button>
+      <p id="profileFeedback" class="muted" role="status"></p>
+    </div>
+  </div></section>
   <section class="view" id="modelsView"><div class="content"><h1>Modele AI</h1><p class="lead">Stan konfiguracji obecnych dostawców. Wizard dodawania kluczy i wykrywania modeli jest następnym etapem.</p><div id="modelCards" class="grid"></div><div class="note" style="margin-top:18px">Konfiguracja kluczy nadal odbywa się po stronie serwera. Ten panel nie prosi o przesyłanie sekretów do pamięci przeglądarki.</div></div></section>
   <section class="view" id="knowledgeView"><div class="content"><h1>Knowledge Studio</h1><p class="lead">Przyszłe źródła RAG: dokumenty, notatki, pliki Markdown, PDF oraz repozytoria. Zatwierdzanie faktów jest już dostępne w Pamięci projektu.</p><div class="panel"><h2><i class="bi bi-file-earmark-arrow-up"></i> Import dokumentów</h2><p class="muted">Plan: upload → ekstrakcja → podział na fragmenty → FTS5 i embeddingi → Retrieval Inspector.</p><div class="note">Import plików nie jest jeszcze aktywny. Nie przechowujemy plików bez zakończonego procesu indeksowania i kontroli źródeł.</div></div></div></section>
   <section class="view" id="observabilityView"><div class="content"><div class="row between"><div><h1>Observability</h1><p class="lead">Podstawowe liczniki zapisanej aktywności. Czasy odpowiedzi, tokeny i koszty będą wymagały osobnego instrumentowania.</p></div><button id="refreshMetrics" class="secondary"><i class="bi bi-arrow-clockwise"></i> Odśwież</button></div><div class="grid" id="metrics"></div><div class="panel" style="margin-top:17px"><h2>Stan monitoringu</h2><div class="note">Widok pokazuje rzeczywiste liczniki SQLite, bez wymyślonych statystyk. Kolejny etap: śledzenie przebiegu żądań, błędów dostawców, czasu retrievalu i kosztów.</div></div></div></section>
   <section class="view" id="settingsView"><div class="content"><h1>Ustawienia</h1><p class="lead">Personalizacja interfejsu zapisywana lokalnie w tej przeglądarce. Hasło i klucze API nie są zapisywane w localStorage.</p><div class="panel"><h2>Motyw kolorystyczny</h2><div class="themes" id="themeChoices"></div></div><div class="panel"><h2>Tryb prywatności</h2><div class="note">„Tylko lokalnie” blokuje użycie modeli chmurowych w formularzu rozmowy. Administracyjna flaga FORCE_LOCAL_ONLY po stronie serwera zapewnia dodatkowe wymuszenie.</div></div></div></section>
 </main>
 <script>
-const $=id=>document.getElementById(id);let cid=null,busy=false;
+const $=id=>document.getElementById(id);let cid=null,busy=false,profilesData=[];
 function api(path,opt={}){return fetch(path,{...opt,headers:{'X-Gateway-Password':$('password').value,...opt.headers}})}
 function say(role,txt=''){if($('conversation').querySelector('.empty-state'))$('conversation').replaceChildren();const e=document.createElement('div');e.className='msg '+role;if(role==='assistant'){const s=document.createElement('span');s.textContent=txt;e.append(s)}else e.textContent=txt;$('conversation').append(e);$('conversation').scrollTop=$('conversation').scrollHeight;return role==='assistant'?e.querySelector('span'):e}
 function status(s){$('status').textContent=s}
 function reset(){cid=null;$('conversation').replaceChildren();say('assistant','W czym mogę pomóc?');switchView('chat')}
-async function list(){const r=await api('/api/chats');if(!r.ok)throw Error('Błąd listy rozmów');$('chats').replaceChildren();for(const c of await r.json()){const b=document.createElement('button');b.className='chat';b.textContent=c.title;b.onclick=async()=>{const a=await api('/api/chats/'+encodeURIComponent(c.id));if(!a.ok)return;cid=c.id;$('conversation').replaceChildren();for(const m of await a.json())say(m.role,m.content)};$('chats').append(b)}}
+async function list(){const r=await api('/api/chats?profile_id='+encodeURIComponent($('profilePicker').value));if(!r.ok)throw Error('Błąd listy rozmów');$('chats').replaceChildren();for(const c of await r.json()){const b=document.createElement('button');b.className='chat';b.textContent=c.title;b.onclick=async()=>{const a=await api('/api/chats/'+encodeURIComponent(c.id));if(!a.ok)return;cid=c.id;$('conversation').replaceChildren();for(const m of await a.json())say(m.role,m.content)};$('chats').append(b)}}
 $('new').onclick=reset;
 $('local').onchange=()=>{for(const o of $('model').options)o.disabled=$('local').checked&&o.value!=='ollama';if($('local').checked)$('model').value='ollama'};
-$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await list();await loadProjects();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono'}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia'}};
-$('form').onsubmit=async e=>{e.preventDefault();if(busy)return;const prompt=$('prompt').value.trim();if(!prompt)return;busy=true;$('send').disabled=true;$('prompt').value='';say('user',prompt);const out=say('assistant');status('Generowanie…');try{const r=await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,provider:$('model').value,message:prompt,local_only:$('local').checked,project_id:$('project').value||null,use_context:$('useContext').checked})});if(!r.ok){const d=await r.json();throw Error(d.detail||'HTTP '+r.status)}const reader=r.body.getReader(),decoder=new TextDecoder();let buf='';while(true){const x=await reader.read();if(x.done)break;buf+=decoder.decode(x.value,{stream:true});let n;while((n=buf.indexOf('\n\n'))>=0){const part=buf.slice(0,n);buf=buf.slice(n+2);for(const line of part.split('\n'))if(line.startsWith('data: ')){const ev=JSON.parse(line.slice(6));if(ev.type==='chat_id')cid=ev.chat_id;if(ev.type==='delta'){out.textContent+=ev.content;$('conversation').scrollTop=$('conversation').scrollHeight}if(ev.type==='error')throw Error(ev.message)}}}await list();status('Gotowe')}catch(e){out.textContent+='\nBłąd: '+e.message;status(e.message)}finally{busy=false;$('send').disabled=false}};
+$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await loadProfiles();await list();await loadProjects();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono';$('sidebarConnectionState').textContent='Online';$('connectionPanel').open=false}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia';$('sidebarConnectionState').textContent='Błąd'}};
+$('form').onsubmit=async e=>{e.preventDefault();if(busy)return;const prompt=$('prompt').value.trim();if(!prompt)return;busy=true;$('send').disabled=true;$('prompt').value='';say('user',prompt);const out=say('assistant');status('Generowanie…');try{const r=await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,provider:$('model').value,message:prompt,local_only:$('local').checked,project_id:$('project').value||null,use_context:$('useContext').checked,profile_id:$('profilePicker').value})});if(!r.ok){const d=await r.json();throw Error(d.detail||'HTTP '+r.status)}const reader=r.body.getReader(),decoder=new TextDecoder();let buf='';while(true){const x=await reader.read();if(x.done)break;buf+=decoder.decode(x.value,{stream:true});let n;while((n=buf.indexOf('\n\n'))>=0){const part=buf.slice(0,n);buf=buf.slice(n+2);for(const line of part.split('\n'))if(line.startsWith('data: ')){const ev=JSON.parse(line.slice(6));if(ev.type==='chat_id')cid=ev.chat_id;if(ev.type==='delta'){out.textContent+=ev.content;$('conversation').scrollTop=$('conversation').scrollHeight}if(ev.type==='error')throw Error(ev.message)}}}await list();status('Gotowe')}catch(e){out.textContent+='\nBłąd: '+e.message;status(e.message)}finally{busy=false;$('send').disabled=false}};
 
 // Memory now lives in its own workspace view.
 async function loadProjects(){
@@ -182,8 +230,8 @@ $('addProject').onclick=async()=>{const name=$('newProjectName').value.trim();if
 $('addFact').onclick=async()=>{const project=$('project').value,body=$('factText').value.trim();if(!project||!body){status('Wybierz projekt i wpisz fakt');return}const r=await api('/api/projects/'+encodeURIComponent(project)+'/facts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body,source:'manual'})});if(r.ok){$('factText').value='';await loadFacts();status('Fakt oczekuje na zatwierdzenie')}else status('Błąd: '+r.status)};
 $('previewContext').onclick=async()=>{const project=$('project').value,question=$('contextQuestion').value.trim();if(!project||!question){status('Wybierz projekt i wpisz pytanie');return}const r=await api('/api/context/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project,question})});if(!r.ok){status('Błąd podglądu '+r.status);return}const x=await r.json();$('contextPreview').textContent=x.system_message||'Brak pasujących zatwierdzonych faktów.';};
 
-const views={chat:'chatView',memory:'memoryView',knowledge:'knowledgeView',models:'modelsView',observability:'observabilityView',settings:'settingsView'};
-const viewNames={chat:'Rozmowa',memory:'Pamięć projektu',knowledge:'Baza wiedzy',models:'Modele AI',observability:'Observability',settings:'Ustawienia'};
+const views={profiles:'profilesView',chat:'chatView',memory:'memoryView',knowledge:'knowledgeView',models:'modelsView',observability:'observabilityView',settings:'settingsView'};
+const viewNames={profiles:'Profile',chat:'Rozmowa',memory:'Pamięć projektu',knowledge:'Baza wiedzy',models:'Modele AI',observability:'Observability',settings:'Ustawienia'};
 function switchView(name){
   if(!views[name])return;
   for(const [key,id] of Object.entries(views))$(id).classList.toggle('active',key===name);
@@ -191,7 +239,8 @@ function switchView(name){
   $('viewTitle').textContent=viewNames[name];
   document.body.classList.remove('menu-open');
   if(name==='observability')loadMetrics();
-  if(name==='models')loadModelCards()
+  if(name==='models')loadModelCards();
+  if(name==='profiles')renderProfileEditor()
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 $('mobileMenu').onclick=()=>document.body.classList.toggle('menu-open');
@@ -242,6 +291,58 @@ async function loadMetrics(){
   }
  }catch(e){container.textContent='Nie udało się pobrać metryk: '+e.message}
 }
+
+function activeProfile(){return profilesData.find(p=>p.id===$('profilePicker').value)}
+function renderProfileEditor(){
+ const p=activeProfile();if(!p)return;
+ $('profileName').value=p.name;
+ $('profileProvider').value=p.preferred_provider;
+ $('profileTheme').value=p.theme;
+ $('profileInstructions').value=p.instructions;
+}
+function applyProfile(p){
+ if(!p)return;
+ setTheme(p.theme);
+ if([...$('model').options].some(o=>o.value===p.preferred_provider&&!o.disabled))$('model').value=p.preferred_provider;
+ renderProfileEditor();
+}
+async function loadProfiles(preferred){
+ const r=await api('/api/profiles');if(!r.ok)throw Error('Błąd pobierania profili: '+r.status);
+ profilesData=await r.json();
+ const selection=preferred||$('profilePicker').value;
+ $('profilePicker').replaceChildren();
+ for(const p of profilesData){
+   const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.name;$('profilePicker').append(opt);
+ }
+ if(profilesData.some(p=>p.id===selection))$('profilePicker').value=selection;
+ else $('profilePicker').value='default';
+ applyProfile(activeProfile())
+}
+$('profilePicker').onchange=async()=>{
+ if(busy){status('Zakończ generowanie przed zmianą profilu');return}
+ cid=null;$('conversation').replaceChildren();
+ say('assistant','Nowy profil. W czym mogę pomóc?');
+ applyProfile(activeProfile());
+ await list();
+ switchView('chat')
+};
+$('createProfile').onclick=async()=>{
+ const name=$('newProfileName').value.trim();if(!name)return;
+ const r=await api('/api/profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+ if(!r.ok){$('profileFeedback').textContent='Nie udało się utworzyć profilu: '+r.status;return}
+ const p=await r.json();await loadProfiles(p.id);$('newProfileName').value='';
+ cid=null;await list();reset();switchView('profiles');
+ $('profileFeedback').textContent='Profil utworzony'
+};
+$('saveProfile').onclick=async()=>{
+ const id=$('profilePicker').value;
+ const body={name:$('profileName').value.trim(),preferred_provider:$('profileProvider').value,
+   theme:$('profileTheme').value,instructions:$('profileInstructions').value};
+ const r=await api('/api/profiles/'+encodeURIComponent(id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ if(!r.ok){$('profileFeedback').textContent='Błąd zapisu: '+r.status;return}
+ await loadProfiles(id);$('profileFeedback').textContent='Zapisano ustawienia profilu'
+};
+
 $('refreshMetrics').onclick=loadMetrics;
 
 $('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('form').requestSubmit()}};
