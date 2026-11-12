@@ -1,28 +1,158 @@
 <!doctype html>
 <html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Gateway LAN</title>
-<style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#17191f;color:#f2f3f6;font:15px system-ui,Arial;display:flex;height:100dvh}aside{width:260px;background:#111318;display:flex;flex-direction:column;padding:18px;gap:14px;border-right:1px solid #333}h2{margin:0;font-size:19px}button,select,input,textarea{font:inherit}button{cursor:pointer;background:#292f39;color:white;border:1px solid #454b57;border-radius:10px;padding:10px}button:hover{background:#394252}#chats{overflow:auto;flex:1}.chat{width:100%;text-align:left;margin:3px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}main{flex:1;min-width:0;display:flex;flex-direction:column}header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;border-bottom:1px solid #353942}select,input{background:#262b34;color:white;border:1px solid #444b56;border-radius:9px;padding:9px}#password{max-width:170px}#conversation{flex:1;overflow:auto;padding:30px max(16px,calc((100% - 850px)/2));display:flex;flex-direction:column;gap:20px}.msg{line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.user{align-self:flex-end;background:#313945;border-radius:16px;padding:12px 16px;max-width:85%}.assistant{align-self:stretch}.assistant:before{content:'AI';display:inline-block;color:#6ee7b7;margin-right:12px;font-weight:bold}.composer{padding:15px max(12px,calc((100% - 900px)/2)) 20px}form{display:flex;gap:10px;background:#292e37;border-radius:15px;padding:10px}textarea{resize:vertical;flex:1;min-height:55px;background:transparent;color:white;border:none;outline:none}#send{background:#087e69;border:0}#status{font-size:12px;color:#9da8ba;text-align:center;margin-top:10px}@media(max-width:700px){aside{width:140px;padding:8px}header{gap:6px}#password{max-width:110px}#conversation{padding:20px 10px}}
 
-#memoryPanel{border-top:1px solid #404650;padding:12px;display:none;max-height:50vh;overflow:auto;background:#1e232b}#memoryPanel.open{display:block}#memoryPanel input,#memoryPanel textarea{width:100%;margin:4px 0}.fact{border:1px solid #414958;border-radius:10px;margin:6px 0;padding:9px;font-size:13px;white-space:pre-wrap}.fact button{padding:5px;margin:4px}#contextPreview{white-space:pre-wrap;max-height:180px;overflow:auto;font-size:12px;background:#11161b;padding:8px;border-radius:8px}#project{max-width:180px}#memoryPanel h3{margin:8px 0}
-</style></head><body>
-<aside><h2>◈ AI Gateway</h2><button id="new">＋ Nowa rozmowa</button><div id="chats"></div><button id="memoryToggle">Pamięć projektu</button><small>LAN · prywatna historia</small></aside>
-<main><header><strong>AI Gateway</strong><select id="model"><option value="ollama">ollama</option></select><select id="project"><option value="">Bez projektu</option></select><label><input id="useContext" type="checkbox" checked> Kontekst</label><label><input id="local" type="checkbox"> Tylko lokalnie</label><input id="password" type="password" placeholder="Hasło"><button id="connect">Połącz</button></header>
-<section id="memoryPanel"><h3>Pamięć projektu</h3><p>Fakty wymagają ręcznego zatwierdzenia. Podgląd pokazuje dokładny kontekst wysyłany do modelu.</p><input id="newProjectName" placeholder="Nazwa nowego projektu"><button id="addProject">Utwórz projekt</button><textarea id="factText" placeholder="Dodaj propozycję faktu…" rows="2"></textarea><button id="addFact">Zaproponuj fakt</button><div id="facts"></div><h3>Podgląd kontekstu</h3><button id="previewContext">Podgląd dla wpisanego pytania</button><div id="contextPreview">Brak podglądu</div></section><section id="conversation"><div class="msg assistant">Wybierz model i rozpocznij rozmowę.</div></section>
-<div class="composer"><form id="form"><textarea id="prompt" required placeholder="Napisz wiadomość…"></textarea><button id="send" type="submit">Wyślij</button></form><div id="status">Modele chmurowe wysyłają treść rozmowy poza LAN.</div></div></main>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+html[data-theme="graphite"]{--bg:#181a20;--sidebar:#111318;--surface:#22262e;--surface2:#2d333d;--border:#38404b;--text:#f3f5f7;--muted:#a4afbd;--accent:#42b59b;--user:#303945;color-scheme:dark}
+html[data-theme="paper"]{--bg:#fff;--sidebar:#f3f5f7;--surface:#f7f8fa;--surface2:#e9edf2;--border:#d8dfe8;--text:#202833;--muted:#5b6977;--accent:#1674b8;--user:#eaf0f6;color-scheme:light}
+html[data-theme="blue"]{--bg:#102035;--sidebar:#0a1729;--surface:#172d47;--surface2:#23405e;--border:#335371;--text:#edf6ff;--muted:#a8c0d8;--accent:#5ac2e3;--user:#1c3955;color-scheme:dark}
+html[data-theme="forest"]{--bg:#15221c;--sidebar:#0c1812;--surface:#203227;--surface2:#2b4737;--border:#41624a;--text:#ecf6ec;--muted:#b1c4b6;--accent:#94d39b;--user:#294535;color-scheme:dark}
+body{margin:0;display:flex;height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);font-size:14px}
+button,select,input,textarea{font:inherit}button{cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#sidebar{width:264px;flex:none;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;gap:12px;padding:17px 12px;transition:width .18s}
+.brand{font-size:16px;font-weight:750;letter-spacing:-.4px;padding:8px 12px;display:flex;align-items:center;gap:10px}
+.brand i{color:var(--accent);font-size:22px}
+.navitem{display:flex;align-items:center;gap:12px;padding:11px 13px;width:100%;text-align:left;background:none;border:0;border-radius:10px;color:var(--text)}
+.navitem i{font-size:17px;width:22px;text-align:center}
+.navitem:hover,.navitem.active{background:var(--surface2)}
+.navitem.active i{color:var(--accent)}
+.nav-caption{color:var(--muted);font-size:10px;font-weight:750;letter-spacing:1.3px;margin:12px 13px 3px}
+#chats{overflow-y:auto;flex:1;min-height:45px}
+.chat{background:none;color:var(--muted);text-align:left;border:0;border-radius:9px;padding:9px 13px;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat:hover{background:var(--surface2);color:var(--text)}
+.sidebar-footer{border-top:1px solid var(--border);padding:12px;color:var(--muted);font-size:12px}
+#workspace{display:flex;flex:1;min-width:0;flex-direction:column}
+.topbar{min-height:66px;padding:12px 23px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--border)}
+.titlebar{display:flex;align-items:center;gap:12px;min-width:0}
+.titlebar strong{white-space:nowrap}
+.toolbar{display:flex;align-items:center;justify-content:end;gap:10px;flex-wrap:wrap}
+select,input,textarea{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:9px 11px;min-width:0}
+select{max-width:215px}
+button.primary{background:var(--accent);border:1px solid var(--accent);color:#091a1b;font-weight:700}
+button.secondary{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+button.primary,button.secondary{border-radius:10px;padding:9px 13px}
+button.secondary:hover{background:var(--surface2)}
+.icon-btn{background:transparent;border:0;color:var(--muted);font-size:19px;border-radius:9px;padding:7px}
+.icon-btn:hover{background:var(--surface2);color:var(--text)}
+#password{width:130px}
+#connectionStatus{font-size:12px;color:var(--muted)}
+.view{display:none;flex:1;min-height:0;overflow:auto}
+.view.active{display:flex;flex-direction:column}
+#conversation{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:22px;padding:35px max(20px,calc((100% - 850px)/2))}
+.empty-state{margin:auto;text-align:center;max-width:430px}
+.empty-state .big-icon{font-size:42px;color:var(--accent);margin-bottom:12px}
+.empty-state h1{font-size:26px;letter-spacing:-.5px;margin:8px 0}
+.empty-state p{color:var(--muted);line-height:1.7}
+.msg{line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:var(--user);border-radius:18px;padding:14px 18px;max-width:84%}
+.assistant{align-self:stretch;position:relative;padding-left:33px}
+.assistant:before{content:'✦';position:absolute;left:0;top:0;color:var(--accent);font-size:21px}
+.composer{width:100%;padding:14px max(15px,calc((100% - 850px)/2)) 20px}
+#form{display:flex;flex-direction:column;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:19px;padding:13px}
+#prompt{border:0;background:transparent;resize:vertical;min-height:52px;width:100%;outline:none}
+.composer-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.options{display:flex;align-items:center;gap:16px;color:var(--muted);font-size:12px}
+#send{border:0;border-radius:100%;width:38px;height:38px;font-size:17px}
+#status{font-size:12px;text-align:center;color:var(--muted);margin-top:9px}
+.content{max-width:1000px;width:100%;padding:34px 25px;margin:0 auto}
+.content h1{font-size:27px;letter-spacing:-.6px;margin:0 0 7px}
+.content .lead{color:var(--muted);line-height:1.65;margin:0 0 24px}
+.panel{background:var(--surface);border:1px solid var(--border);padding:20px;border-radius:16px;margin-bottom:16px}
+.panel h2{font-size:16px;margin:0 0 15px}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.between{justify-content:space-between}
+.muted{color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:7px;margin-bottom:13px}
+.field label{font-size:12px;color:var(--muted)}
+.field textarea{width:100%;min-height:82px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.metric{border:1px solid var(--border);border-radius:13px;background:var(--surface);padding:21px}
+.metric strong{display:block;font-size:28px;margin:10px 0 4px}
+.metric small{color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:18px;border:1px solid var(--border);padding:5px 9px;font-size:11px;color:var(--muted)}
+.pill.ok{color:var(--accent)}
+.fact{border-top:1px solid var(--border);padding:14px 0;line-height:1.5;overflow-wrap:anywhere}
+.fact small{display:block;color:var(--muted);margin:7px 0}
+.fact button{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:5px 9px;margin:2px}
+#contextPreview{white-space:pre-wrap;max-height:240px;overflow:auto;background:var(--sidebar);border-radius:10px;padding:13px;font-size:12px;line-height:1.6}
+#previewContext{margin-bottom:12px}
+.note{border-left:3px solid var(--accent);padding:12px;background:var(--surface);color:var(--muted);font-size:13px;border-radius:6px;line-height:1.6}
+.themes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.theme-choice{border:2px solid transparent;border-radius:13px;padding:10px;background:var(--surface2);color:var(--text);text-align:left}
+.theme-choice[aria-pressed="true"]{border-color:var(--accent)}
+.swatch{height:57px;border-radius:7px;margin-bottom:8px;display:flex;align-items:end;padding:8px}
+.swatch span{display:block;width:48%;height:10px;border-radius:4px}
+.theme-choice small{color:var(--text)}
+#mobileMenu{display:none}
+@media(max-width:830px){#sidebar{position:absolute;z-index:10;left:0;top:0;bottom:0;box-shadow:0 0 20px #0006;transform:translateX(-102%);width:260px}body.menu-open #sidebar{transform:translateX(0)}#mobileMenu{display:block}.topbar{padding:9px 13px}.toolbar{gap:6px}#password{width:100px}select{max-width:150px}.content{padding:20px 13px}.themes{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.topbar{flex-wrap:wrap}.toolbar{justify-content:start;width:100%}.options{gap:8px}#conversation{padding:22px 16px}}
+</style></head>
+<body>
+<aside id="sidebar" aria-label="Nawigacja">
+  <div class="brand"><i class="bi bi-stars" aria-hidden="true"></i> PI-LAB <span class="muted">/ AI Gateway</span></div>
+  <button class="navitem" id="new"><i class="bi bi-pencil-square" aria-hidden="true"></i> Nowa rozmowa</button>
+  <div class="nav-caption">WORKSPACE</div>
+  <button class="navitem active" data-view="chat"><i class="bi bi-chat-square-dots" aria-hidden="true"></i> Rozmowy</button>
+  <button class="navitem" data-view="memory" id="memoryToggle"><i class="bi bi-brain" aria-hidden="true"></i> Pamięć projektu</button>
+  <button class="navitem" data-view="knowledge"><i class="bi bi-journal-text" aria-hidden="true"></i> Baza wiedzy</button>
+  <div class="nav-caption">SYSTEM</div>
+  <button class="navitem" data-view="models"><i class="bi bi-cpu" aria-hidden="true"></i> Modele AI</button>
+  <button class="navitem" data-view="observability"><i class="bi bi-activity" aria-hidden="true"></i> Observability</button>
+  <button class="navitem" data-view="settings"><i class="bi bi-sliders" aria-hidden="true"></i> Ustawienia</button>
+  <div class="nav-caption">HISTORIA</div>
+  <div id="chats"></div>
+  <div class="sidebar-footer"><i class="bi bi-hdd-network" aria-hidden="true"></i> LAN · historia w lokalnym SQLite</div>
+</aside>
+<main id="workspace">
+  <header class="topbar">
+    <div class="titlebar"><button id="mobileMenu" class="icon-btn" aria-label="Otwórz menu"><i class="bi bi-list"></i></button><strong id="viewTitle">Rozmowa</strong><span class="pill" id="connectionStatus">Niepołączono</span></div>
+    <div class="toolbar">
+      <select id="model" aria-label="Model"><option value="ollama">Ollama</option></select>
+      <select id="project" aria-label="Projekt"><option value="">Bez projektu</option></select>
+      <input id="password" type="password" placeholder="Hasło" autocomplete="off" aria-label="Hasło gateway">
+      <button id="connect" class="secondary">Połącz</button>
+    </div>
+  </header>
+  <section class="view active" id="chatView">
+    <div id="conversation"><div class="empty-state"><div class="big-icon"><i class="bi bi-stars"></i></div><h1>W czym mogę pomóc?</h1><p>Wybierz model i projekt, aby rozmawiać z AI z kontrolą lokalnego kontekstu.</p></div></div>
+    <div class="composer">
+      <form id="form"><textarea id="prompt" required placeholder="Napisz wiadomość…" aria-label="Wiadomość"></textarea>
+        <div class="composer-actions">
+          <div class="options"><label><input id="useContext" type="checkbox" checked> Kontekst projektu</label><label><input id="local" type="checkbox"> Tylko lokalnie</label></div>
+          <button id="send" class="primary" type="submit" aria-label="Wyślij"><i class="bi bi-arrow-up"></i></button>
+        </div>
+      </form>
+      <div id="status" role="status">Modele chmurowe otrzymują przesłany prompt i wybrany kontekst.</div>
+    </div>
+  </section>
+  <section class="view" id="memoryView"><div class="content">
+    <h1>Pamięć projektu</h1><p class="lead">Propozycje faktów wymagają zatwierdzenia. Do modelu trafiają tylko zatwierdzone fakty wybranego projektu.</p>
+    <div class="panel"><h2>Projekty i fakty</h2><div class="field"><label for="newProjectName">Nazwa nowego projektu</label><input id="newProjectName" placeholder="np. AI Gateway"></div><button class="secondary" id="addProject">Utwórz projekt</button><div class="field" style="margin-top:18px"><label for="factText">Nowy fakt do weryfikacji</label><textarea id="factText" rows="2" placeholder="Wpisz sprawdzoną informację…"></textarea></div><button class="secondary" id="addFact">Zaproponuj fakt</button><div id="facts"></div></div>
+    <div class="panel"><h2>Podgląd kontekstu</h2><p class="muted">Wpisz poniżej pytanie, aby sprawdzić dobór faktów. Podgląd nie wysyła nic do dostawcy AI.</p><div class="field"><label for="contextQuestion">Pytanie testowe</label><textarea id="contextQuestion" rows="2" placeholder="Jak uruchamiamy gateway?"></textarea></div><button class="secondary" id="previewContext">Zobacz dołączany kontekst</button><div id="contextPreview">Wybierz projekt i wpisz pytanie.</div></div>
+  </div></section>
+  <section class="view" id="modelsView"><div class="content"><h1>Modele AI</h1><p class="lead">Stan konfiguracji obecnych dostawców. Wizard dodawania kluczy i wykrywania modeli jest następnym etapem.</p><div id="modelCards" class="grid"></div><div class="note" style="margin-top:18px">Konfiguracja kluczy nadal odbywa się po stronie serwera. Ten panel nie prosi o przesyłanie sekretów do pamięci przeglądarki.</div></div></section>
+  <section class="view" id="knowledgeView"><div class="content"><h1>Knowledge Studio</h1><p class="lead">Przyszłe źródła RAG: dokumenty, notatki, pliki Markdown, PDF oraz repozytoria. Zatwierdzanie faktów jest już dostępne w Pamięci projektu.</p><div class="panel"><h2><i class="bi bi-file-earmark-arrow-up"></i> Import dokumentów</h2><p class="muted">Plan: upload → ekstrakcja → podział na fragmenty → FTS5 i embeddingi → Retrieval Inspector.</p><div class="note">Import plików nie jest jeszcze aktywny. Nie przechowujemy plików bez zakończonego procesu indeksowania i kontroli źródeł.</div></div></div></section>
+  <section class="view" id="observabilityView"><div class="content"><div class="row between"><div><h1>Observability</h1><p class="lead">Podstawowe liczniki zapisanej aktywności. Czasy odpowiedzi, tokeny i koszty będą wymagały osobnego instrumentowania.</p></div><button id="refreshMetrics" class="secondary"><i class="bi bi-arrow-clockwise"></i> Odśwież</button></div><div class="grid" id="metrics"></div><div class="panel" style="margin-top:17px"><h2>Stan monitoringu</h2><div class="note">Widok pokazuje rzeczywiste liczniki SQLite, bez wymyślonych statystyk. Kolejny etap: śledzenie przebiegu żądań, błędów dostawców, czasu retrievalu i kosztów.</div></div></div></section>
+  <section class="view" id="settingsView"><div class="content"><h1>Ustawienia</h1><p class="lead">Personalizacja interfejsu zapisywana lokalnie w tej przeglądarce. Hasło i klucze API nie są zapisywane w localStorage.</p><div class="panel"><h2>Motyw kolorystyczny</h2><div class="themes" id="themeChoices"></div></div><div class="panel"><h2>Tryb prywatności</h2><div class="note">„Tylko lokalnie” blokuje użycie modeli chmurowych w formularzu rozmowy. Administracyjna flaga FORCE_LOCAL_ONLY po stronie serwera zapewnia dodatkowe wymuszenie.</div></div></div></section>
+</main>
 <script>
 const $=id=>document.getElementById(id);let cid=null,busy=false;
 function api(path,opt={}){return fetch(path,{...opt,headers:{'X-Gateway-Password':$('password').value,...opt.headers}})}
-function say(role,txt=''){const e=document.createElement('div');e.className='msg '+role;if(role==='assistant'){const s=document.createElement('span');s.textContent=txt;e.append(s)}else e.textContent=txt;$('conversation').append(e);$('conversation').scrollTop=$('conversation').scrollHeight;return role==='assistant'?e.querySelector('span'):e}
+function say(role,txt=''){if($('conversation').querySelector('.empty-state'))$('conversation').replaceChildren();const e=document.createElement('div');e.className='msg '+role;if(role==='assistant'){const s=document.createElement('span');s.textContent=txt;e.append(s)}else e.textContent=txt;$('conversation').append(e);$('conversation').scrollTop=$('conversation').scrollHeight;return role==='assistant'?e.querySelector('span'):e}
 function status(s){$('status').textContent=s}
-function reset(){cid=null;$('conversation').replaceChildren();say('assistant','W czym mogę pomóc?')}
+function reset(){cid=null;$('conversation').replaceChildren();say('assistant','W czym mogę pomóc?');switchView('chat')}
 async function list(){const r=await api('/api/chats');if(!r.ok)throw Error('Błąd listy rozmów');$('chats').replaceChildren();for(const c of await r.json()){const b=document.createElement('button');b.className='chat';b.textContent=c.title;b.onclick=async()=>{const a=await api('/api/chats/'+encodeURIComponent(c.id));if(!a.ok)return;cid=c.id;$('conversation').replaceChildren();for(const m of await a.json())say(m.role,m.content)};$('chats').append(b)}}
 $('new').onclick=reset;
 $('local').onchange=()=>{for(const o of $('model').options)o.disabled=$('local').checked&&o.value!=='ollama';if($('local').checked)$('model').value='ollama'};
-$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await list();await loadProjects();status('Połączono')}catch(e){status(e.message)}};
+$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await list();await loadProjects();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono'}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia'}};
 $('form').onsubmit=async e=>{e.preventDefault();if(busy)return;const prompt=$('prompt').value.trim();if(!prompt)return;busy=true;$('send').disabled=true;$('prompt').value='';say('user',prompt);const out=say('assistant');status('Generowanie…');try{const r=await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,provider:$('model').value,message:prompt,local_only:$('local').checked,project_id:$('project').value||null,use_context:$('useContext').checked})});if(!r.ok){const d=await r.json();throw Error(d.detail||'HTTP '+r.status)}const reader=r.body.getReader(),decoder=new TextDecoder();let buf='';while(true){const x=await reader.read();if(x.done)break;buf+=decoder.decode(x.value,{stream:true});let n;while((n=buf.indexOf('\n\n'))>=0){const part=buf.slice(0,n);buf=buf.slice(n+2);for(const line of part.split('\n'))if(line.startsWith('data: ')){const ev=JSON.parse(line.slice(6));if(ev.type==='chat_id')cid=ev.chat_id;if(ev.type==='delta'){out.textContent+=ev.content;$('conversation').scrollTop=$('conversation').scrollHeight}if(ev.type==='error')throw Error(ev.message)}}}await list();status('Gotowe')}catch(e){out.textContent+='\nBłąd: '+e.message;status(e.message)}finally{busy=false;$('send').disabled=false}};
 
-$('memoryToggle').onclick=()=>$('memoryPanel').classList.toggle('open');
+// Memory now lives in its own workspace view.
 async function loadProjects(){
  const r=await api('/api/projects');if(!r.ok)throw Error('Nie udało się pobrać projektów');
  const previous=$('project').value;$('project').replaceChildren();
@@ -50,6 +180,69 @@ async function loadFacts(){
 $('project').onchange=loadFacts;
 $('addProject').onclick=async()=>{const name=$('newProjectName').value.trim();if(!name)return;const r=await api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});if(!r.ok){status('Nie można utworzyć projektu');return}const p=await r.json();await loadProjects();$('project').value=p.id;await loadFacts();$('newProjectName').value=''};
 $('addFact').onclick=async()=>{const project=$('project').value,body=$('factText').value.trim();if(!project||!body){status('Wybierz projekt i wpisz fakt');return}const r=await api('/api/projects/'+encodeURIComponent(project)+'/facts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body,source:'manual'})});if(r.ok){$('factText').value='';await loadFacts();status('Fakt oczekuje na zatwierdzenie')}else status('Błąd: '+r.status)};
-$('previewContext').onclick=async()=>{const project=$('project').value,question=$('prompt').value.trim();if(!project||!question){status('Wybierz projekt i wpisz pytanie');return}const r=await api('/api/context/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project,question})});if(!r.ok){status('Błąd podglądu '+r.status);return}const x=await r.json();$('contextPreview').textContent=x.system_message||'Brak pasujących zatwierdzonych faktów.';};
+$('previewContext').onclick=async()=>{const project=$('project').value,question=$('contextQuestion').value.trim();if(!project||!question){status('Wybierz projekt i wpisz pytanie');return}const r=await api('/api/context/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project,question})});if(!r.ok){status('Błąd podglądu '+r.status);return}const x=await r.json();$('contextPreview').textContent=x.system_message||'Brak pasujących zatwierdzonych faktów.';};
+
+const views={chat:'chatView',memory:'memoryView',knowledge:'knowledgeView',models:'modelsView',observability:'observabilityView',settings:'settingsView'};
+const viewNames={chat:'Rozmowa',memory:'Pamięć projektu',knowledge:'Baza wiedzy',models:'Modele AI',observability:'Observability',settings:'Ustawienia'};
+function switchView(name){
+  if(!views[name])return;
+  for(const [key,id] of Object.entries(views))$(id).classList.toggle('active',key===name);
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
+  $('viewTitle').textContent=viewNames[name];
+  document.body.classList.remove('menu-open');
+  if(name==='observability')loadMetrics();
+  if(name==='models')loadModelCards()
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+$('mobileMenu').onclick=()=>document.body.classList.toggle('menu-open');
+const palettes=[
+  {id:'graphite',name:'Graphite',bg:'#181a20',accent:'#42b59b'},
+  {id:'paper',name:'Paper',bg:'#f3f5f7',accent:'#1674b8'},
+  {id:'blue',name:'PI-LAB Blue',bg:'#102035',accent:'#5ac2e3'},
+  {id:'forest',name:'Forest',bg:'#15221c',accent:'#94d39b'}
+];
+function setTheme(name){
+  const theme=palettes.some(p=>p.id===name)?name:'graphite';
+  document.documentElement.dataset.theme=theme;
+  try{localStorage.setItem('gateway.theme',theme)}catch(_){}
+  document.querySelectorAll('.theme-choice').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.theme===theme)))
+}
+for(const t of palettes){
+ const b=document.createElement('button');b.className='theme-choice';b.type='button';b.dataset.theme=t.id;
+ const sw=document.createElement('div');sw.className='swatch';sw.style.background=t.bg;
+ const bar=document.createElement('span');bar.style.background=t.accent;sw.append(bar);
+ const label=document.createElement('small');label.textContent=t.name;b.append(sw,label);
+ b.onclick=()=>setTheme(t.id);$('themeChoices').append(b);
+}
+try{setTheme(localStorage.getItem('gateway.theme')||'graphite')}catch(_){setTheme('graphite')}
+async function loadModelCards(){
+ const container=$('modelCards');if(!$('password').value){container.textContent='Połącz się, aby zobaczyć konfigurację modeli.';return}
+ try{
+  const r=await api('/api/models');if(!r.ok)throw Error('HTTP '+r.status);
+  container.replaceChildren();
+  for(const m of await r.json()){
+   const card=document.createElement('div');card.className='metric';
+   const title=document.createElement('strong');title.style.fontSize='18px';title.textContent=m.provider;
+   const model=document.createElement('small');model.textContent=m.model;
+   const badge=document.createElement('div');badge.className='pill '+(m.configured?'ok':'');badge.style.marginTop='15px';badge.textContent=m.configured?'Skonfigurowany':'Brak konfiguracji';
+   card.append(title,model,badge);container.append(card)
+  }
+ }catch(e){container.textContent='Nie udało się odczytać modeli: '+e.message}
+}
+async function loadMetrics(){
+ const container=$('metrics');if(!$('password').value){container.textContent='Połącz się, aby wyświetlić telemetrię.';return}
+ try{
+  const r=await api('/api/observability/summary');if(!r.ok)throw Error('HTTP '+r.status);
+  const d=await r.json();container.replaceChildren();
+  for(const [key,label] of [['chats','Rozmowy'],['messages','Wiadomości'],['projects','Projekty'],['approved_facts','Zatwierdzone fakty'],['pending_facts','Fakty do weryfikacji']]){
+   const card=document.createElement('div');card.className='metric';
+   const caption=document.createElement('small');caption.textContent=label;
+   const value=document.createElement('strong');value.textContent=String(d[key]);
+   card.append(caption,value);container.append(card)
+  }
+ }catch(e){container.textContent='Nie udało się pobrać metryk: '+e.message}
+}
+$('refreshMetrics').onclick=loadMetrics;
+
 $('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('form').requestSubmit()}};
 </script></body></html>

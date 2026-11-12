@@ -2,6 +2,10 @@
 
 Public open-source self-hosted AI chat gateway. UI and conversation database remain on your host; using cloud providers sends prompts to those providers.
 
+## Workspace UI 1.0 (in development)
+
+The `feat/workspace-ui` branch adds a responsive PI-LAB workspace, four themes, navigation for chat, project memory, model status, Knowledge Studio planning and live SQLite observability counters. Provider wizard and file RAG are not yet implemented. See [scope and next milestones](deploy/WORKSPACE.md).
+
 ## Features
 
 - Responsive ChatGPT-inspired web UI, model selector, streaming responses
