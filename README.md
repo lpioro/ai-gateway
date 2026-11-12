@@ -2,14 +2,18 @@
 
 Public open-source self-hosted AI chat gateway. UI and conversation database remain on your host; using cloud providers sends prompts to those providers.
 
-## Workspace UI 1.0 (in development)
+## PI-LAB Workspace
 
-The `feat/workspace-ui` branch adds a responsive PI-LAB workspace, four themes, navigation for chat, project memory, model status, Knowledge Studio planning and live SQLite observability counters. Provider wizard and file RAG are not yet implemented. See [scope and next milestones](deploy/WORKSPACE.md).
+The current `main` branch includes a responsive chat-first workspace, four themes, project-memory review, a provider-status page, basic SQLite observability counters and **workspace profiles**. Profile and connection controls live in the left sidebar. See the [workspace guide](deploy/WORKSPACE.md) and [profiles guide](deploy/PROFILES.md).
+
+Profiles are personalized workspaces, **not independent authenticated accounts**. A shared gateway password protects the application; profile switching does not isolate sensitive information between different people. Provider configuration wizard, document ingestion and vector RAG are not yet implemented.
 
 ## Features
 
 - Responsive ChatGPT-inspired web UI, model selector, streaming responses
 - SQLite chat history and chat deletion API
+- Named workspace profiles with per-profile chat lists, preferred provider, visual theme and optional answer instructions
+- Expandable password/connection section in the left sidebar
 - Ollama (local), OpenAI, Groq and Gemini via OpenAI-compatible Chat Completions endpoints
 - Server-enforced `FORCE_LOCAL_ONLY=true` mode
 - Docker Compose, Proxmox LXC deployment example
@@ -62,10 +66,14 @@ Project-scoped, approval-gated local memory using SQLite FTS5: select a project,
 
 - `GET /healthz` — basic health check
 - `GET /api/models` — configured models
-- `GET /api/chats` — history list
+- `GET /api/chats` — history list (optional `?profile_id=...` filter)
+- `GET /api/profiles` — list profiles
+- `POST /api/profiles` — create named workspace profile
+- `PUT /api/profiles/{id}` — update profile name, instructions, preferred provider, theme
+- `GET /api/observability/summary` — local aggregate counters
 - `GET /api/chats/{id}` — messages
 - `DELETE /api/chats/{id}` — delete chat
-- `POST /api/chat` — SSE stream
+- `POST /api/chat` — SSE stream (optional `profile_id`, default `default`)
 
 Protected routes require an `X-Gateway-Password` header.
 
