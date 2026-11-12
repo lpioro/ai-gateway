@@ -102,3 +102,14 @@ def test_connection_moved_to_sidebar_and_profile_editor():
         assert 'id="profilePicker"' in html
         assert 'id="profilesView"' in html
         assert 'id="profileInstructions"' in html
+
+
+
+def test_sidebar_navigation_is_scrollable_and_profile_creation_has_feedback():
+    with TestClient(app) as client:
+        html = client.get("/").text
+        assert "overflow-y:auto;min-height:0;scrollbar-gutter:stable" in html
+        assert "Utwórz / edytuj profil" in html
+        assert "Podaj nazwę profilu." in html
+        assert "Najpierw połącz się z Gateway" in html
+        assert "Błąd tworzenia profilu:" in html
