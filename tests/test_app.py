@@ -38,3 +38,20 @@ def test_chat_lifecycle():
         assert c.get("/api/chats/example-chat", headers=HEADERS).json()[0]["content"] == "hello"
         assert c.delete("/api/chats/example-chat", headers=HEADERS).json() == {"deleted": True}
         assert c.get("/api/chats/example-chat", headers=HEADERS).status_code == 404
+
+
+def test_workspace_shell():
+    with TestClient(app) as client:
+        r = client.get("/")
+        assert r.status_code == 200
+        for marker in ("PI-LAB", "themeChoices", "observabilityView", "knowledgeView", "memoryView", "bootstrap-icons"):
+            assert marker in r.text
+
+
+def test_observability_requires_auth_and_counts():
+    with TestClient(app) as client:
+        assert client.get("/api/observability/summary").status_code == 401
+        r = client.get("/api/observability/summary", headers=HEADERS)
+        assert r.status_code == 200
+        assert set(r.json()) == {"chats", "messages", "projects", "approved_facts", "pending_facts"}
+        assert all(isinstance(v, int) and v >= 0 for v in r.json().values())
