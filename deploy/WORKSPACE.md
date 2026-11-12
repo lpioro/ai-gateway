@@ -36,3 +36,18 @@
 - In Models, see correct configured/unconfigured status.
 - In Observability, check counts update after refresh.
 - On a narrow screen, open sidebar via menu icon and navigate.
+
+## User profiles and sidebar connection (next iteration)
+
+- Profiles are **workspace personas, not security accounts**. All profiles share the existing gateway password and database access; do not use them to isolate private data between independent users.
+- Profiles have a name, preferred provider, visual theme and optional instructions for LLM answers.
+- The frontend switches profile chat lists; new chats are tagged with `profile_id`. Previous chats migrate to the `default` profile without losing messages.
+- Backend prevents posting new messages to a chat whose `profile_id` differs from the active one.
+- Profile instructions are added as a system message for new LLM requests. They may be included in requests to cloud providers. Do not put confidential data or API keys in profile instructions.
+- Password / Connect were moved from the header to the expandable **Połączenie Gateway** section in the left sidebar; credentials are not stored in localStorage.
+- APIs: `GET /api/profiles`, `POST /api/profiles`, `PUT /api/profiles/{profile_id}`; `GET /api/chats?profile_id=...`; `POST /api/chat` accepts `profile_id`.
+- New profiles currently do not support deletion; old projects and approved facts are shared across profiles. Fine-grained authorization and true multi-user accounts remain out of scope.
+
+### Deployment
+
+This modifies the SQLite schema additively on startup. Back up the DB before updating native LXC. Existing conversations remain and are associated with the default workspace profile.
