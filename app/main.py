@@ -71,6 +71,20 @@ async def index():
 async def models():
     return [{"provider": name, "model": p["model"], "configured": bool(os.getenv(p["key"])) if p["key"] else True} for name, p in PROVIDERS.items()]
 
+@app.get("/api/observability/summary", dependencies=[Depends(authenticated)])
+async def observability_summary():
+    """Cheap counts from the local SQLite database, no prompt content or secrets."""
+    with conn() as db:
+        def count(sql):
+            return db.execute(sql).fetchone()[0]
+        return {
+            "chats": count("SELECT COUNT(*) FROM chats"),
+            "messages": count("SELECT COUNT(*) FROM messages"),
+            "projects": count("SELECT COUNT(*) FROM projects"),
+            "approved_facts": count("SELECT COUNT(*) FROM facts WHERE status='approved'"),
+            "pending_facts": count("SELECT COUNT(*) FROM facts WHERE status='pending'"),
+        }
+
 @app.get("/api/chats", dependencies=[Depends(authenticated)])
 async def chats():
     with conn() as c:
