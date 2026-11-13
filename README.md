@@ -11,6 +11,7 @@ Profiles are personalized workspaces, **not independent authenticated accounts**
 ## Features
 
 - Responsive ChatGPT-inspired web UI, model selector, streaming responses
+- Local safe Markdown formatting in assistant answers: headings, paragraphs, emphasis, lists, links, blockquotes and fenced code blocks (also when reopening chat history)
 - SQLite chat history and chat deletion API
 - Named workspace profiles with per-profile chat lists, preferred provider, visual theme and optional answer instructions
 - Expandable password/connection section in the left sidebar

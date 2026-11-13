@@ -77,3 +77,19 @@ All pre-existing conversations are assigned to the `default` profile on the firs
 Back up the SQLite file **with the service stopped** before upgrading. Update the git checkout and rerun the native installer described in [LXC.md](LXC.md). Verify `/api/profiles`, switch between two profiles, and confirm that existing chats still appear in **Domyślny**. Use a controlled LAN or HTTPS reverse proxy; the shared-password mechanism is not sufficient for public access.
 
 See [PROFILES.md](PROFILES.md) for API examples, data model and troubleshooting.
+
+## Markdown answer rendering
+
+The chat UI renders assistant answers as lightweight Markdown, including paragraphs, headings, bold/italic/strikethrough, hyperlinks, inline code, code fences, bullets, numbered lists, quotes and separators. Content is updated during SSE streaming (batched on animation frames), and saved assistant messages are formatted again when their conversation is opened.
+
+The renderer is a local `/static/markdown.js` asset, with no third-party runtime dependencies. It **never** uses `innerHTML` or evaluates model-supplied HTML; markup becomes text nodes. Links are accepted only with `http://` and `https://` URL schemes and open with `rel=noopener noreferrer`. Code has horizontal scrolling; syntax highlighting is not implemented yet.
+
+This is an intentional *lightweight Markdown subset*, not a full CommonMark/GFM parser: nested lists, tables, embedded images, LaTeX and complex inline nesting are not yet handled. User messages remain plaintext. The server/database keep original Markdown source, not rendered HTML.
+
+### Manual smoke test
+
+1. Ask OpenAI for a reply containing a title, two paragraphs, **bold** emphasis, a numbered list and a `python` code block.
+2. Verify formatting appears during streaming and survives reopening the chat from history.
+3. Paste a prompt requesting literal `<script>alert(1)</script>` and verify it appears as plain text without executing.
+4. Test on a narrow viewport; long code lines should scroll horizontally inside their code block.
+5. Disconnect the Internet (leaving LAN access) and confirm formatting still works.
