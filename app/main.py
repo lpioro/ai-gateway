@@ -8,11 +8,12 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, File, Form, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from app import context as memory
+from app import knowledge
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent
@@ -35,6 +36,7 @@ def init_db():
         c.execute("CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         c.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         memory.setup(c)
+        knowledge.setup(c)
         c.execute("""CREATE TABLE IF NOT EXISTS user_profiles (
             id TEXT PRIMARY KEY, name TEXT NOT NULL,
             instructions TEXT NOT NULL DEFAULT '',
@@ -177,6 +179,18 @@ class FactCreate(BaseModel):
 class FactReview(BaseModel):
     status: str
 
+class KnowledgePaste(BaseModel):
+    project_id: str
+    title: str = Field(min_length=1, max_length=160)
+    content: str = Field(min_length=1, max_length=250000)
+
+class KnowledgeSearch(BaseModel):
+    project_id: str
+    question: str = Field(min_length=1, max_length=25000)
+
+class KnowledgeReview(BaseModel):
+    status: str
+
 class ContextPreview(BaseModel):
     project_id: str
     question: str = Field(min_length=1, max_length=25000)
@@ -223,12 +237,90 @@ async def delete_fact(project_id: str, fact_id: str):
             raise HTTPException(404,"Fact not found")
     return {"deleted":True}
 
+
+def ensure_project(db, project_id):
+    if not memory.project_exists(db,project_id):
+        raise HTTPException(404,"Project not found")
+
+@app.get("/api/knowledge", dependencies=[Depends(authenticated)])
+async def knowledge_list(project_id: str):
+    with conn() as db:
+        ensure_project(db,project_id)
+        return knowledge.list_sources(db,project_id)
+
+@app.post("/api/knowledge/paste", dependencies=[Depends(authenticated)], status_code=201)
+async def knowledge_paste(req: KnowledgePaste):
+    with conn() as db:
+        ensure_project(db,req.project_id)
+        try:
+            sid=knowledge.add(db,req.project_id,req.title,req.content,"paste")
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+    return {"id":sid,"status":"pending"}
+
+@app.post("/api/knowledge/upload", dependencies=[Depends(authenticated)], status_code=201)
+async def knowledge_upload(project_id: str = Form(...), file: UploadFile = File(...)):
+    name = (file.filename or "").split("/")[-1].split(chr(92))[-1]
+    if not name or len(name)>160:
+        raise HTTPException(422,"Nieprawidłowa nazwa pliku")
+    with conn() as db:
+        ensure_project(db,project_id)
+    raw=await file.read(knowledge.MAX_UPLOAD_BYTES+1)
+    await file.close()
+    if len(raw)>knowledge.MAX_UPLOAD_BYTES:
+        raise HTTPException(413,"Przekroczono limit 5 MB")
+    try:
+        text=knowledge.extract(name,raw)
+        with conn() as db:
+            sid=knowledge.add(db,project_id,name,text,"file")
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(422,"Nie można odczytać tekstu z pliku") from exc
+    return {"id":sid,"status":"pending"}
+
+@app.post("/api/knowledge/search", dependencies=[Depends(authenticated)])
+async def knowledge_search(req: KnowledgeSearch):
+    with conn() as db:
+        ensure_project(db,req.project_id)
+        return knowledge.retrieve(db,req.project_id,req.question,approved_only=False)
+
+@app.get("/api/knowledge/{source_id}", dependencies=[Depends(authenticated)])
+async def knowledge_get(source_id: str, project_id: str):
+    with conn() as db:
+        ensure_project(db,project_id)
+        item=knowledge.fetch_source(db,project_id,source_id)
+        if item is None:
+            raise HTTPException(404,"Knowledge source not found")
+        return item
+
+@app.patch("/api/knowledge/{source_id}", dependencies=[Depends(authenticated)])
+async def knowledge_approve(source_id: str, project_id: str, req: KnowledgeReview):
+    if req.status not in ("pending","approved"):
+        raise HTTPException(422,"Invalid status")
+    with conn() as db:
+        ensure_project(db,project_id)
+        if not knowledge.set_status(db,project_id,source_id,req.status):
+            raise HTTPException(404,"Knowledge source not found")
+    return {"id":source_id,"status":req.status}
+
+@app.delete("/api/knowledge/{source_id}", dependencies=[Depends(authenticated)])
+async def knowledge_delete(source_id: str, project_id: str):
+    with conn() as db:
+        ensure_project(db,project_id)
+        if not knowledge.remove(db,project_id,source_id):
+            raise HTTPException(404,"Knowledge source not found")
+    return {"deleted":True}
+
 @app.post("/api/context/preview", dependencies=[Depends(authenticated)])
 async def preview_context(req: ContextPreview):
     with conn() as c:
         if not memory.project_exists(c,req.project_id):
             raise HTTPException(404,"Project not found")
-        return memory.build_context(c,req.project_id,req.question)
+        facts=memory.build_context(c,req.project_id,req.question)
+        sources=knowledge.build_context(c,req.project_id,req.question)
+        message="\n\n".join(x for x in (facts["system_message"],sources["system_message"]) if x) or None
+        return {"facts":facts["facts"],"sources":sources["sources"],"system_message":message}
 
 @app.post("/api/chat", dependencies=[Depends(authenticated)])
 async def chat(req: ChatRequest):
@@ -245,7 +337,9 @@ async def chat(req: ChatRequest):
         with conn() as c:
             if not memory.project_exists(c,req.project_id):
                 raise HTTPException(404,"Project not found")
-            context_message=memory.build_context(c,req.project_id,req.message)["system_message"]
+            fact_message=memory.build_context(c,req.project_id,req.message)["system_message"]
+            source_message=knowledge.build_context(c,req.project_id,req.message)["system_message"]
+            context_message="\n\n".join(x for x in (fact_message,source_message) if x) or None
     with conn() as c:
         profile = c.execute(
             "SELECT instructions FROM user_profiles WHERE id=?", (req.profile_id,)

@@ -115,6 +115,11 @@ button.secondary:hover{background:var(--surface2)}
 .fact button{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:5px 9px;margin:2px}
 #contextPreview{white-space:pre-wrap;max-height:240px;overflow:auto;background:var(--sidebar);border-radius:10px;padding:13px;font-size:12px;line-height:1.6}
 #previewContext{margin-bottom:12px}
+.knowledge-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;border-radius:10px;padding:14px;background:var(--sidebar);font-size:12px;line-height:1.65}
+.knowledge-entry{border-top:1px solid var(--border);padding:13px 0}
+.knowledge-entry .muted{font-size:12px}
+.knowledge-entry .row{margin-top:8px}
+.knowledge-entry button{padding:6px 9px;font-size:12px}
 .note{border-left:3px solid var(--accent);padding:12px;background:var(--surface);color:var(--muted);font-size:13px;border-radius:6px;line-height:1.6}
 .themes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .theme-choice{border:2px solid transparent;border-radius:13px;padding:10px;background:var(--surface2);color:var(--text);text-align:left}
@@ -207,7 +212,38 @@ button.secondary:hover{background:var(--surface2)}
     </div>
   </div></section>
   <section class="view" id="modelsView"><div class="content"><h1>Modele AI</h1><p class="lead">Stan konfiguracji obecnych dostawców. Wizard dodawania kluczy i wykrywania modeli jest następnym etapem.</p><div id="modelCards" class="grid"></div><div class="note" style="margin-top:18px">Konfiguracja kluczy nadal odbywa się po stronie serwera. Ten panel nie prosi o przesyłanie sekretów do pamięci przeglądarki.</div></div></section>
-  <section class="view" id="knowledgeView"><div class="content"><h1>Knowledge Studio</h1><p class="lead">Przyszłe źródła RAG: dokumenty, notatki, pliki Markdown, PDF oraz repozytoria. Zatwierdzanie faktów jest już dostępne w Pamięci projektu.</p><div class="panel"><h2><i class="bi bi-file-earmark-arrow-up"></i> Import dokumentów</h2><p class="muted">Plan: upload → ekstrakcja → podział na fragmenty → FTS5 i embeddingi → Retrieval Inspector.</p><div class="note">Import plików nie jest jeszcze aktywny. Nie przechowujemy plików bez zakończonego procesu indeksowania i kontroli źródeł.</div></div></div></section>
+  <section class="view" id="knowledgeView"><div class="content">
+  <h1><i class="bi bi-journal-text"></i> Baza wiedzy</h1>
+  <p class="lead">Lokalna biblioteka dokumentów przypisana do projektu. Importowane materiały są najpierw weryfikowane — do czatu trafiają wyłącznie zatwierdzone źródła.</p>
+  <div class="note" id="knowledgeProjectHint">Wybierz projekt w górnym pasku, aby zarządzać wiedzą.</div>
+  <div class="grid" style="margin-top:17px">
+    <div class="panel">
+      <h2><i class="bi bi-clipboard-plus"></i> Wklej treść</h2>
+      <div class="field"><label for="knowledgeTitle">Tytuł źródła</label><input id="knowledgeTitle" maxlength="160" placeholder="np. Procedura onboardingu"></div>
+      <div class="field"><label for="knowledgeBody">Treść (do 250 tys. znaków)</label><textarea id="knowledgeBody" maxlength="250000" rows="8" placeholder="Wklej notatkę, artykuł, procedurę, wymagania…"></textarea></div>
+      <button id="knowledgePaste" class="primary" type="button"><i class="bi bi-plus-circle"></i> Dodaj do bazy</button>
+    </div>
+    <div class="panel">
+      <h2><i class="bi bi-file-earmark-arrow-up"></i> Import pliku</h2>
+      <p class="muted">TXT, Markdown, CSV, JSON, PDF z warstwą tekstową, DOCX. Limit 5 MB na plik. Nie wykonujemy OCR ani makr.</p>
+      <div class="field"><label for="knowledgeFile">Plik źródłowy</label><input id="knowledgeFile" type="file" accept=".txt,.md,.csv,.json,.pdf,.docx"></div>
+      <button id="knowledgeUpload" class="secondary" type="button"><i class="bi bi-upload"></i> Prześlij i zaindeksuj</button>
+      <p class="muted">Przechowywana jest wyodrębniona treść w SQLite, a nie oryginalny plik.</p>
+    </div>
+  </div>
+  <p id="knowledgeFeedback" class="muted" role="status"></p>
+  <div class="panel">
+    <div class="row between"><h2><i class="bi bi-collection"></i> Źródła projektu</h2><button id="knowledgeRefresh" class="secondary">Odśwież</button></div>
+    <div id="knowledgeSources" class="muted">Połącz się i wybierz projekt.</div>
+  </div>
+  <div class="panel">
+    <h2><i class="bi bi-search"></i> Wyszukiwanie i kontrola retrievalu</h2>
+    <div class="row"><input id="knowledgeQuery" style="flex:1" placeholder="Pytanie lub słowa kluczowe…"><button id="knowledgeSearch" class="secondary">Szukaj</button></div>
+    <p class="muted" style="font-size:12px">Wyniki obejmują też źródła oczekujące, ale AI otrzyma tylko zatwierdzone.</p>
+    <div id="knowledgeResults"></div>
+  </div>
+  <div class="panel"><h2><i class="bi bi-eye"></i> Podgląd źródła</h2><pre id="knowledgePreview" class="knowledge-preview">Wybierz źródło z listy.</pre></div>
+</div></section>
   <section class="view" id="observabilityView"><div class="content"><div class="row between"><div><h1>Observability</h1><p class="lead">Podstawowe liczniki zapisanej aktywności. Czasy odpowiedzi, tokeny i koszty będą wymagały osobnego instrumentowania.</p></div><button id="refreshMetrics" class="secondary"><i class="bi bi-arrow-clockwise"></i> Odśwież</button></div><div class="grid" id="metrics"></div><div class="panel" style="margin-top:17px"><h2>Stan monitoringu</h2><div class="note">Widok pokazuje rzeczywiste liczniki SQLite, bez wymyślonych statystyk. Kolejny etap: śledzenie przebiegu żądań, błędów dostawców, czasu retrievalu i kosztów.</div></div></div></section>
   <section class="view" id="settingsView"><div class="content"><h1>Ustawienia</h1><p class="lead">Personalizacja interfejsu zapisywana lokalnie w tej przeglądarce. Hasło i klucze API nie są zapisywane w localStorage.</p><div class="panel"><h2>Motyw kolorystyczny</h2><div class="themes" id="themeChoices"></div></div><div class="panel"><h2>Tryb prywatności</h2><div class="note">„Tylko lokalnie” blokuje użycie modeli chmurowych w formularzu rozmowy. Administracyjna flaga FORCE_LOCAL_ONLY po stronie serwera zapewnia dodatkowe wymuszenie.</div></div></div></section>
 </main>
@@ -245,7 +281,7 @@ function reset(){cid=null;$('conversation').replaceChildren();say('assistant','W
 async function list(){const r=await api('/api/chats?profile_id='+encodeURIComponent($('profilePicker').value));if(!r.ok)throw Error('Błąd listy rozmów');$('chats').replaceChildren();for(const c of await r.json()){const b=document.createElement('button');b.className='chat';b.textContent=c.title;b.onclick=async()=>{const a=await api('/api/chats/'+encodeURIComponent(c.id));if(!a.ok)return;cid=c.id;$('conversation').replaceChildren();for(const m of await a.json())say(m.role,m.content)};$('chats').append(b)}}
 $('new').onclick=reset;
 $('local').onchange=()=>{for(const o of $('model').options)o.disabled=$('local').checked&&o.value!=='ollama';if($('local').checked)$('model').value='ollama'};
-$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await loadProfiles();await list();await loadProjects();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono';$('sidebarConnectionState').textContent='Online';$('connectionPanel').open=false}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia';$('sidebarConnectionState').textContent='Błąd'}};
+$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await loadProfiles();await list();await loadProjects();await loadKnowledge();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono';$('sidebarConnectionState').textContent='Online';$('connectionPanel').open=false}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia';$('sidebarConnectionState').textContent='Błąd'}};
 $('form').onsubmit=async e=>{e.preventDefault();if(busy)return;const prompt=$('prompt').value.trim();if(!prompt)return;busy=true;$('send').disabled=true;$('prompt').value='';say('user',prompt);const out=say('assistant');let answer='';status('Generowanie…');try{const r=await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,provider:$('model').value,message:prompt,local_only:$('local').checked,project_id:$('project').value||null,use_context:$('useContext').checked,profile_id:$('profilePicker').value})});if(!r.ok){const d=await r.json();throw Error(d.detail||'HTTP '+r.status)}const reader=r.body.getReader(),decoder=new TextDecoder();let buf='';while(true){const x=await reader.read();if(x.done)break;buf+=decoder.decode(x.value,{stream:true});let n;while((n=buf.indexOf('\n\n'))>=0){const part=buf.slice(0,n);buf=buf.slice(n+2);for(const line of part.split('\n'))if(line.startsWith('data: ')){const ev=JSON.parse(line.slice(6));if(ev.type==='chat_id')cid=ev.chat_id;if(ev.type==='delta'){answer+=ev.content;scheduleAnswerRender(out,answer)}if(ev.type==='error')throw Error(ev.message)}}}renderAnswer(out,answer);await list();status('Gotowe')}catch(e){const error=document.createElement('div');error.className='md-error';error.textContent='Błąd: '+e.message;out.after(error);status(e.message)}finally{busy=false;$('send').disabled=false}};
 
 // Memory now lives in its own workspace view.
@@ -273,10 +309,106 @@ async function loadFacts(){
    $('facts').append(card)
  }
 }
-$('project').onchange=loadFacts;
+$('project').onchange=()=>{loadFacts();loadKnowledge()};
 $('addProject').onclick=async()=>{const name=$('newProjectName').value.trim();if(!name)return;const r=await api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});if(!r.ok){status('Nie można utworzyć projektu');return}const p=await r.json();await loadProjects();$('project').value=p.id;await loadFacts();$('newProjectName').value=''};
 $('addFact').onclick=async()=>{const project=$('project').value,body=$('factText').value.trim();if(!project||!body){status('Wybierz projekt i wpisz fakt');return}const r=await api('/api/projects/'+encodeURIComponent(project)+'/facts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body,source:'manual'})});if(r.ok){$('factText').value='';await loadFacts();status('Fakt oczekuje na zatwierdzenie')}else status('Błąd: '+r.status)};
 $('previewContext').onclick=async()=>{const project=$('project').value,question=$('contextQuestion').value.trim();if(!project||!question){status('Wybierz projekt i wpisz pytanie');return}const r=await api('/api/context/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project,question})});if(!r.ok){status('Błąd podglądu '+r.status);return}const x=await r.json();$('contextPreview').textContent=x.system_message||'Brak pasujących zatwierdzonych faktów.';};
+
+
+function knowledgeProject(){return $('project').value}
+function knowledgeFeedback(msg){$('knowledgeFeedback').textContent=msg}
+async function knowledgeApiError(r){
+ try{const x=await r.json();return typeof x.detail==='string'?x.detail:'HTTP '+r.status}
+ catch(_){return 'HTTP '+r.status}
+}
+async function loadKnowledge(){
+ const pid=knowledgeProject();
+ $('knowledgeProjectHint').textContent=pid?'Projekt: '+$('project').selectedOptions[0].textContent:'Wybierz projekt w górnym pasku.';
+ const el=$('knowledgeSources');el.replaceChildren();
+ if(!pid){el.textContent='Wybierz projekt, aby przeglądać źródła.';return}
+ if(!$('password').value){el.textContent='Połącz się najpierw z Gateway.';return}
+ try{
+  const r=await api('/api/knowledge?project_id='+encodeURIComponent(pid));
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  const docs=await r.json();
+  if(!docs.length){el.textContent='Brak źródeł. Wklej tekst lub prześlij dokument.';return}
+  for(const d of docs){
+   const entry=document.createElement('div');entry.className='knowledge-entry';
+   const title=document.createElement('strong');title.textContent=d.title;entry.append(title);
+   const meta=document.createElement('div');meta.className='muted';
+   meta.textContent=d.source_type+' · '+d.characters+' znaków · '+d.chunks+' fragmentów · '+(d.status==='approved'?'Zatwierdzone':'Oczekuje na weryfikację');
+   entry.append(meta);
+   const row=document.createElement('div');row.className='row';
+   const button=(label,fn)=>{const b=document.createElement('button');b.className='secondary';b.type='button';b.textContent=label;b.onclick=fn;row.append(b)};
+   button('Podgląd',async()=>{
+    const response=await api('/api/knowledge/'+encodeURIComponent(d.id)+'?project_id='+encodeURIComponent(pid));
+    if(response.ok){const body=await response.json();$('knowledgePreview').textContent=body.text}
+    else knowledgeFeedback('Podgląd: '+await knowledgeApiError(response))
+   });
+   button(d.status==='approved'?'Cofnij zatwierdzenie':'Zatwierdź',async()=>{
+    const desired=d.status==='approved'?'pending':'approved';
+    const response=await api('/api/knowledge/'+encodeURIComponent(d.id)+'?project_id='+encodeURIComponent(pid),
+      {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:desired})});
+    if(response.ok){knowledgeFeedback(desired==='approved'?'Źródło zatwierdzone do kontekstu AI':'Źródło wycofane z kontekstu');await loadKnowledge()}
+    else knowledgeFeedback('Błąd: '+await knowledgeApiError(response))
+   });
+   button('Usuń',async()=>{
+    if(!confirm('Usunąć źródło '+d.title+' i jego indeks?'))return;
+    const response=await api('/api/knowledge/'+encodeURIComponent(d.id)+'?project_id='+encodeURIComponent(pid),{method:'DELETE'});
+    if(response.ok){$('knowledgePreview').textContent='Wybierz źródło z listy.';await loadKnowledge()}
+    else knowledgeFeedback('Błąd: '+await knowledgeApiError(response))
+   });
+   entry.append(row);el.append(entry)
+  }
+ }catch(e){el.textContent='Nie udało się pobrać źródeł: '+e.message}
+}
+$('knowledgeRefresh').onclick=loadKnowledge;
+$('knowledgePaste').onclick=async()=>{
+ const pid=knowledgeProject(),title=$('knowledgeTitle').value.trim(),content=$('knowledgeBody').value.trim();
+ if(!pid||!title||!content){knowledgeFeedback('Wybierz projekt, podaj tytuł i treść.');return}
+ try{
+  const r=await api('/api/knowledge/paste',{method:'POST',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:pid,title,content})});
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  $('knowledgeTitle').value='';$('knowledgeBody').value='';
+  knowledgeFeedback('Treść zapisana. Zatwierdź ją po weryfikacji.');
+  await loadKnowledge();
+ }catch(e){knowledgeFeedback('Błąd importu: '+e.message)}
+};
+$('knowledgeUpload').onclick=async()=>{
+ const pid=knowledgeProject(),file=$('knowledgeFile').files[0];
+ if(!pid||!file){knowledgeFeedback('Wybierz projekt i plik.');return}
+ if(file.size>5*1024*1024){knowledgeFeedback('Plik przekracza limit 5 MB.');return}
+ const data=new FormData();data.append('project_id',pid);data.append('file',file);
+ const btn=$('knowledgeUpload');btn.disabled=true;
+ try{
+  const r=await api('/api/knowledge/upload',{method:'POST',body:data});
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  $('knowledgeFile').value='';
+  knowledgeFeedback('Plik zaindeksowany. Sprawdź treść i zatwierdź źródło.');
+  await loadKnowledge();
+ }catch(e){knowledgeFeedback('Błąd pliku: '+e.message)}
+ finally{btn.disabled=false}
+};
+$('knowledgeSearch').onclick=async()=>{
+ const pid=knowledgeProject(),question=$('knowledgeQuery').value.trim();
+ const el=$('knowledgeResults');el.replaceChildren();
+ if(!pid||!question){knowledgeFeedback('Wybierz projekt i wpisz pytanie.');return}
+ try{
+  const r=await api('/api/knowledge/search',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({project_id:pid,question})});
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  const result=await r.json();
+  if(!result.length){el.textContent='Brak dopasowań.';return}
+  for(const item of result){
+   const card=document.createElement('div');card.className='knowledge-entry';
+   const title=document.createElement('strong');title.textContent=item.title+' · fragment '+(item.position+1);
+   const label=document.createElement('div');label.className='muted';label.textContent=item.status==='approved'?'Zatwierdzone':'Oczekuje na weryfikację';
+   const excerpt=document.createElement('p');excerpt.textContent=item.body.slice(0,700);
+   card.append(title,label,excerpt);el.append(card)
+  }
+ }catch(e){knowledgeFeedback('Błąd wyszukiwania: '+e.message)}
+};
 
 const views={profiles:'profilesView',chat:'chatView',memory:'memoryView',knowledge:'knowledgeView',models:'modelsView',observability:'observabilityView',settings:'settingsView'};
 const viewNames={profiles:'Profile',chat:'Rozmowa',memory:'Pamięć projektu',knowledge:'Baza wiedzy',models:'Modele AI',observability:'Observability',settings:'Ustawienia'};
@@ -288,6 +420,7 @@ function switchView(name){
   document.body.classList.remove('menu-open');
   if(name==='observability')loadMetrics();
   if(name==='models')loadModelCards();
+  if(name==='knowledge')loadKnowledge();
   if(name==='profiles')renderProfileEditor()
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
