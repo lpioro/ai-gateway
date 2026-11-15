@@ -281,7 +281,7 @@ function reset(){cid=null;$('conversation').replaceChildren();say('assistant','W
 async function list(){const r=await api('/api/chats?profile_id='+encodeURIComponent($('profilePicker').value));if(!r.ok)throw Error('Błąd listy rozmów');$('chats').replaceChildren();for(const c of await r.json()){const b=document.createElement('button');b.className='chat';b.textContent=c.title;b.onclick=async()=>{const a=await api('/api/chats/'+encodeURIComponent(c.id));if(!a.ok)return;cid=c.id;$('conversation').replaceChildren();for(const m of await a.json())say(m.role,m.content)};$('chats').append(b)}}
 $('new').onclick=reset;
 $('local').onchange=()=>{for(const o of $('model').options)o.disabled=$('local').checked&&o.value!=='ollama';if($('local').checked)$('model').value='ollama'};
-$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await loadProfiles();await list();await loadProjects();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono';$('sidebarConnectionState').textContent='Online';$('connectionPanel').open=false}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia';$('sidebarConnectionState').textContent='Błąd'}};
+$('connect').onclick=async()=>{try{const r=await api('/api/models');if(!r.ok)throw Error('Brak dostępu: '+r.status);$('model').replaceChildren();for(const m of await r.json()){let o=document.createElement('option');o.value=m.provider;o.textContent=m.provider+' · '+m.model+(m.configured?'':' (brak klucza)');o.disabled=!m.configured||($('local').checked&&m.provider!=='ollama');$('model').append(o)}await loadProfiles();await list();await loadProjects();await loadKnowledge();await loadModelCards();status('Połączono');$('connectionStatus').textContent='Połączono';$('sidebarConnectionState').textContent='Online';$('connectionPanel').open=false}catch(e){status(e.message);$('connectionStatus').textContent='Błąd połączenia';$('sidebarConnectionState').textContent='Błąd'}};
 $('form').onsubmit=async e=>{e.preventDefault();if(busy)return;const prompt=$('prompt').value.trim();if(!prompt)return;busy=true;$('send').disabled=true;$('prompt').value='';say('user',prompt);const out=say('assistant');let answer='';status('Generowanie…');try{const r=await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,provider:$('model').value,message:prompt,local_only:$('local').checked,project_id:$('project').value||null,use_context:$('useContext').checked,profile_id:$('profilePicker').value})});if(!r.ok){const d=await r.json();throw Error(d.detail||'HTTP '+r.status)}const reader=r.body.getReader(),decoder=new TextDecoder();let buf='';while(true){const x=await reader.read();if(x.done)break;buf+=decoder.decode(x.value,{stream:true});let n;while((n=buf.indexOf('\n\n'))>=0){const part=buf.slice(0,n);buf=buf.slice(n+2);for(const line of part.split('\n'))if(line.startsWith('data: ')){const ev=JSON.parse(line.slice(6));if(ev.type==='chat_id')cid=ev.chat_id;if(ev.type==='delta'){answer+=ev.content;scheduleAnswerRender(out,answer)}if(ev.type==='error')throw Error(ev.message)}}}renderAnswer(out,answer);await list();status('Gotowe')}catch(e){const error=document.createElement('div');error.className='md-error';error.textContent='Błąd: '+e.message;out.after(error);status(e.message)}finally{busy=false;$('send').disabled=false}};
 
 // Memory now lives in its own workspace view.
@@ -313,6 +313,102 @@ $('project').onchange=()=>{loadFacts();loadKnowledge()};
 $('addProject').onclick=async()=>{const name=$('newProjectName').value.trim();if(!name)return;const r=await api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});if(!r.ok){status('Nie można utworzyć projektu');return}const p=await r.json();await loadProjects();$('project').value=p.id;await loadFacts();$('newProjectName').value=''};
 $('addFact').onclick=async()=>{const project=$('project').value,body=$('factText').value.trim();if(!project||!body){status('Wybierz projekt i wpisz fakt');return}const r=await api('/api/projects/'+encodeURIComponent(project)+'/facts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body,source:'manual'})});if(r.ok){$('factText').value='';await loadFacts();status('Fakt oczekuje na zatwierdzenie')}else status('Błąd: '+r.status)};
 $('previewContext').onclick=async()=>{const project=$('project').value,question=$('contextQuestion').value.trim();if(!project||!question){status('Wybierz projekt i wpisz pytanie');return}const r=await api('/api/context/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project,question})});if(!r.ok){status('Błąd podglądu '+r.status);return}const x=await r.json();$('contextPreview').textContent=x.system_message||'Brak pasujących zatwierdzonych faktów.';};
+
+
+function knowledgeProject(){return $('project').value}
+function knowledgeFeedback(msg){$('knowledgeFeedback').textContent=msg}
+async function knowledgeApiError(r){
+ try{const x=await r.json();return typeof x.detail==='string'?x.detail:'HTTP '+r.status}
+ catch(_){return 'HTTP '+r.status}
+}
+async function loadKnowledge(){
+ const pid=knowledgeProject();
+ $('knowledgeProjectHint').textContent=pid?'Projekt: '+$('project').selectedOptions[0].textContent:'Wybierz projekt w górnym pasku.';
+ const el=$('knowledgeSources');el.replaceChildren();
+ if(!pid){el.textContent='Wybierz projekt, aby przeglądać źródła.';return}
+ if(!$('password').value){el.textContent='Połącz się najpierw z Gateway.';return}
+ try{
+  const r=await api('/api/knowledge?project_id='+encodeURIComponent(pid));
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  const docs=await r.json();
+  if(!docs.length){el.textContent='Brak źródeł. Wklej tekst lub prześlij dokument.';return}
+  for(const d of docs){
+   const entry=document.createElement('div');entry.className='knowledge-entry';
+   const title=document.createElement('strong');title.textContent=d.title;entry.append(title);
+   const meta=document.createElement('div');meta.className='muted';
+   meta.textContent=d.source_type+' · '+d.characters+' znaków · '+d.chunks+' fragmentów · '+(d.status==='approved'?'Zatwierdzone':'Oczekuje na weryfikację');
+   entry.append(meta);
+   const row=document.createElement('div');row.className='row';
+   const button=(label,fn)=>{const b=document.createElement('button');b.className='secondary';b.type='button';b.textContent=label;b.onclick=fn;row.append(b)};
+   button('Podgląd',async()=>{
+    const response=await api('/api/knowledge/'+encodeURIComponent(d.id)+'?project_id='+encodeURIComponent(pid));
+    if(response.ok){const body=await response.json();$('knowledgePreview').textContent=body.text}
+    else knowledgeFeedback('Podgląd: '+await knowledgeApiError(response))
+   });
+   button(d.status==='approved'?'Cofnij zatwierdzenie':'Zatwierdź',async()=>{
+    const desired=d.status==='approved'?'pending':'approved';
+    const response=await api('/api/knowledge/'+encodeURIComponent(d.id)+'?project_id='+encodeURIComponent(pid),
+      {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:desired})});
+    if(response.ok){knowledgeFeedback(desired==='approved'?'Źródło zatwierdzone do kontekstu AI':'Źródło wycofane z kontekstu');await loadKnowledge()}
+    else knowledgeFeedback('Błąd: '+await knowledgeApiError(response))
+   });
+   button('Usuń',async()=>{
+    if(!confirm('Usunąć źródło '+d.title+' i jego indeks?'))return;
+    const response=await api('/api/knowledge/'+encodeURIComponent(d.id)+'?project_id='+encodeURIComponent(pid),{method:'DELETE'});
+    if(response.ok){$('knowledgePreview').textContent='Wybierz źródło z listy.';await loadKnowledge()}
+    else knowledgeFeedback('Błąd: '+await knowledgeApiError(response))
+   });
+   entry.append(row);el.append(entry)
+  }
+ }catch(e){el.textContent='Nie udało się pobrać źródeł: '+e.message}
+}
+$('knowledgeRefresh').onclick=loadKnowledge;
+$('knowledgePaste').onclick=async()=>{
+ const pid=knowledgeProject(),title=$('knowledgeTitle').value.trim(),content=$('knowledgeBody').value.trim();
+ if(!pid||!title||!content){knowledgeFeedback('Wybierz projekt, podaj tytuł i treść.');return}
+ try{
+  const r=await api('/api/knowledge/paste',{method:'POST',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:pid,title,content})});
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  $('knowledgeTitle').value='';$('knowledgeBody').value='';
+  knowledgeFeedback('Treść zapisana. Zatwierdź ją po weryfikacji.');
+  await loadKnowledge();
+ }catch(e){knowledgeFeedback('Błąd importu: '+e.message)}
+};
+$('knowledgeUpload').onclick=async()=>{
+ const pid=knowledgeProject(),file=$('knowledgeFile').files[0];
+ if(!pid||!file){knowledgeFeedback('Wybierz projekt i plik.');return}
+ if(file.size>5*1024*1024){knowledgeFeedback('Plik przekracza limit 5 MB.');return}
+ const data=new FormData();data.append('project_id',pid);data.append('file',file);
+ const btn=$('knowledgeUpload');btn.disabled=true;
+ try{
+  const r=await api('/api/knowledge/upload',{method:'POST',body:data});
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  $('knowledgeFile').value='';
+  knowledgeFeedback('Plik zaindeksowany. Sprawdź treść i zatwierdź źródło.');
+  await loadKnowledge();
+ }catch(e){knowledgeFeedback('Błąd pliku: '+e.message)}
+ finally{btn.disabled=false}
+};
+$('knowledgeSearch').onclick=async()=>{
+ const pid=knowledgeProject(),question=$('knowledgeQuery').value.trim();
+ const el=$('knowledgeResults');el.replaceChildren();
+ if(!pid||!question){knowledgeFeedback('Wybierz projekt i wpisz pytanie.');return}
+ try{
+  const r=await api('/api/knowledge/search',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({project_id:pid,question})});
+  if(!r.ok)throw Error(await knowledgeApiError(r));
+  const result=await r.json();
+  if(!result.length){el.textContent='Brak dopasowań.';return}
+  for(const item of result){
+   const card=document.createElement('div');card.className='knowledge-entry';
+   const title=document.createElement('strong');title.textContent=item.title+' · fragment '+(item.position+1);
+   const label=document.createElement('div');label.className='muted';label.textContent=item.status==='approved'?'Zatwierdzone':'Oczekuje na weryfikację';
+   const excerpt=document.createElement('p');excerpt.textContent=item.body.slice(0,700);
+   card.append(title,label,excerpt);el.append(card)
+  }
+ }catch(e){knowledgeFeedback('Błąd wyszukiwania: '+e.message)}
+};
 
 const views={profiles:'profilesView',chat:'chatView',memory:'memoryView',knowledge:'knowledgeView',models:'modelsView',observability:'observabilityView',settings:'settingsView'};
 const viewNames={profiles:'Profile',chat:'Rozmowa',memory:'Pamięć projektu',knowledge:'Baza wiedzy',models:'Modele AI',observability:'Observability',settings:'Ustawienia'};
