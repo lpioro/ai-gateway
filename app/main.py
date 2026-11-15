@@ -8,11 +8,12 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, File, Form, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from app import context as memory
+from app import knowledge
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent
@@ -35,6 +36,7 @@ def init_db():
         c.execute("CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         c.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
         memory.setup(c)
+        knowledge.setup(c)
         c.execute("""CREATE TABLE IF NOT EXISTS user_profiles (
             id TEXT PRIMARY KEY, name TEXT NOT NULL,
             instructions TEXT NOT NULL DEFAULT '',
@@ -175,6 +177,18 @@ class FactCreate(BaseModel):
     source: str = Field(default="manual", max_length=120)
 
 class FactReview(BaseModel):
+    status: str
+
+class KnowledgePaste(BaseModel):
+    project_id: str
+    title: str = Field(min_length=1, max_length=160)
+    content: str = Field(min_length=1, max_length=250000)
+
+class KnowledgeSearch(BaseModel):
+    project_id: str
+    question: str = Field(min_length=1, max_length=25000)
+
+class KnowledgeReview(BaseModel):
     status: str
 
 class ContextPreview(BaseModel):
