@@ -317,7 +317,10 @@ async def preview_context(req: ContextPreview):
     with conn() as c:
         if not memory.project_exists(c,req.project_id):
             raise HTTPException(404,"Project not found")
-        return memory.build_context(c,req.project_id,req.question)
+        facts=memory.build_context(c,req.project_id,req.question)
+        sources=knowledge.build_context(c,req.project_id,req.question)
+        message="\n\n".join(x for x in (facts["system_message"],sources["system_message"]) if x) or None
+        return {"facts":facts["facts"],"sources":sources["sources"],"system_message":message}
 
 @app.post("/api/chat", dependencies=[Depends(authenticated)])
 async def chat(req: ChatRequest):
@@ -334,7 +337,9 @@ async def chat(req: ChatRequest):
         with conn() as c:
             if not memory.project_exists(c,req.project_id):
                 raise HTTPException(404,"Project not found")
-            context_message=memory.build_context(c,req.project_id,req.message)["system_message"]
+            fact_message=memory.build_context(c,req.project_id,req.message)["system_message"]
+            source_message=knowledge.build_context(c,req.project_id,req.message)["system_message"]
+            context_message="\n\n".join(x for x in (fact_message,source_message) if x) or None
     with conn() as c:
         profile = c.execute(
             "SELECT instructions FROM user_profiles WHERE id=?", (req.profile_id,)
