@@ -115,6 +115,11 @@ button.secondary:hover{background:var(--surface2)}
 .fact button{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:5px 9px;margin:2px}
 #contextPreview{white-space:pre-wrap;max-height:240px;overflow:auto;background:var(--sidebar);border-radius:10px;padding:13px;font-size:12px;line-height:1.6}
 #previewContext{margin-bottom:12px}
+.knowledge-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;border-radius:10px;padding:14px;background:var(--sidebar);font-size:12px;line-height:1.65}
+.knowledge-entry{border-top:1px solid var(--border);padding:13px 0}
+.knowledge-entry .muted{font-size:12px}
+.knowledge-entry .row{margin-top:8px}
+.knowledge-entry button{padding:6px 9px;font-size:12px}
 .note{border-left:3px solid var(--accent);padding:12px;background:var(--surface);color:var(--muted);font-size:13px;border-radius:6px;line-height:1.6}
 .themes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .theme-choice{border:2px solid transparent;border-radius:13px;padding:10px;background:var(--surface2);color:var(--text);text-align:left}
@@ -207,7 +212,38 @@ button.secondary:hover{background:var(--surface2)}
     </div>
   </div></section>
   <section class="view" id="modelsView"><div class="content"><h1>Modele AI</h1><p class="lead">Stan konfiguracji obecnych dostawców. Wizard dodawania kluczy i wykrywania modeli jest następnym etapem.</p><div id="modelCards" class="grid"></div><div class="note" style="margin-top:18px">Konfiguracja kluczy nadal odbywa się po stronie serwera. Ten panel nie prosi o przesyłanie sekretów do pamięci przeglądarki.</div></div></section>
-  <section class="view" id="knowledgeView"><div class="content"><h1>Knowledge Studio</h1><p class="lead">Przyszłe źródła RAG: dokumenty, notatki, pliki Markdown, PDF oraz repozytoria. Zatwierdzanie faktów jest już dostępne w Pamięci projektu.</p><div class="panel"><h2><i class="bi bi-file-earmark-arrow-up"></i> Import dokumentów</h2><p class="muted">Plan: upload → ekstrakcja → podział na fragmenty → FTS5 i embeddingi → Retrieval Inspector.</p><div class="note">Import plików nie jest jeszcze aktywny. Nie przechowujemy plików bez zakończonego procesu indeksowania i kontroli źródeł.</div></div></div></section>
+  <section class="view" id="knowledgeView"><div class="content">
+  <h1><i class="bi bi-journal-text"></i> Baza wiedzy</h1>
+  <p class="lead">Lokalna biblioteka dokumentów przypisana do projektu. Importowane materiały są najpierw weryfikowane — do czatu trafiają wyłącznie zatwierdzone źródła.</p>
+  <div class="note" id="knowledgeProjectHint">Wybierz projekt w górnym pasku, aby zarządzać wiedzą.</div>
+  <div class="grid" style="margin-top:17px">
+    <div class="panel">
+      <h2><i class="bi bi-clipboard-plus"></i> Wklej treść</h2>
+      <div class="field"><label for="knowledgeTitle">Tytuł źródła</label><input id="knowledgeTitle" maxlength="160" placeholder="np. Procedura onboardingu"></div>
+      <div class="field"><label for="knowledgeBody">Treść (do 250 tys. znaków)</label><textarea id="knowledgeBody" maxlength="250000" rows="8" placeholder="Wklej notatkę, artykuł, procedurę, wymagania…"></textarea></div>
+      <button id="knowledgePaste" class="primary" type="button"><i class="bi bi-plus-circle"></i> Dodaj do bazy</button>
+    </div>
+    <div class="panel">
+      <h2><i class="bi bi-file-earmark-arrow-up"></i> Import pliku</h2>
+      <p class="muted">TXT, Markdown, CSV, JSON, PDF z warstwą tekstową, DOCX. Limit 5 MB na plik. Nie wykonujemy OCR ani makr.</p>
+      <div class="field"><label for="knowledgeFile">Plik źródłowy</label><input id="knowledgeFile" type="file" accept=".txt,.md,.csv,.json,.pdf,.docx"></div>
+      <button id="knowledgeUpload" class="secondary" type="button"><i class="bi bi-upload"></i> Prześlij i zaindeksuj</button>
+      <p class="muted">Przechowywana jest wyodrębniona treść w SQLite, a nie oryginalny plik.</p>
+    </div>
+  </div>
+  <p id="knowledgeFeedback" class="muted" role="status"></p>
+  <div class="panel">
+    <div class="row between"><h2><i class="bi bi-collection"></i> Źródła projektu</h2><button id="knowledgeRefresh" class="secondary">Odśwież</button></div>
+    <div id="knowledgeSources" class="muted">Połącz się i wybierz projekt.</div>
+  </div>
+  <div class="panel">
+    <h2><i class="bi bi-search"></i> Wyszukiwanie i kontrola retrievalu</h2>
+    <div class="row"><input id="knowledgeQuery" style="flex:1" placeholder="Pytanie lub słowa kluczowe…"><button id="knowledgeSearch" class="secondary">Szukaj</button></div>
+    <p class="muted" style="font-size:12px">Wyniki obejmują też źródła oczekujące, ale AI otrzyma tylko zatwierdzone.</p>
+    <div id="knowledgeResults"></div>
+  </div>
+  <div class="panel"><h2><i class="bi bi-eye"></i> Podgląd źródła</h2><pre id="knowledgePreview" class="knowledge-preview">Wybierz źródło z listy.</pre></div>
+</div></section>
   <section class="view" id="observabilityView"><div class="content"><div class="row between"><div><h1>Observability</h1><p class="lead">Podstawowe liczniki zapisanej aktywności. Czasy odpowiedzi, tokeny i koszty będą wymagały osobnego instrumentowania.</p></div><button id="refreshMetrics" class="secondary"><i class="bi bi-arrow-clockwise"></i> Odśwież</button></div><div class="grid" id="metrics"></div><div class="panel" style="margin-top:17px"><h2>Stan monitoringu</h2><div class="note">Widok pokazuje rzeczywiste liczniki SQLite, bez wymyślonych statystyk. Kolejny etap: śledzenie przebiegu żądań, błędów dostawców, czasu retrievalu i kosztów.</div></div></div></section>
   <section class="view" id="settingsView"><div class="content"><h1>Ustawienia</h1><p class="lead">Personalizacja interfejsu zapisywana lokalnie w tej przeglądarce. Hasło i klucze API nie są zapisywane w localStorage.</p><div class="panel"><h2>Motyw kolorystyczny</h2><div class="themes" id="themeChoices"></div></div><div class="panel"><h2>Tryb prywatności</h2><div class="note">„Tylko lokalnie” blokuje użycie modeli chmurowych w formularzu rozmowy. Administracyjna flaga FORCE_LOCAL_ONLY po stronie serwera zapewnia dodatkowe wymuszenie.</div></div></div></section>
 </main>
@@ -273,7 +309,7 @@ async function loadFacts(){
    $('facts').append(card)
  }
 }
-$('project').onchange=loadFacts;
+$('project').onchange=()=>{loadFacts();loadKnowledge()};
 $('addProject').onclick=async()=>{const name=$('newProjectName').value.trim();if(!name)return;const r=await api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});if(!r.ok){status('Nie można utworzyć projektu');return}const p=await r.json();await loadProjects();$('project').value=p.id;await loadFacts();$('newProjectName').value=''};
 $('addFact').onclick=async()=>{const project=$('project').value,body=$('factText').value.trim();if(!project||!body){status('Wybierz projekt i wpisz fakt');return}const r=await api('/api/projects/'+encodeURIComponent(project)+'/facts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body,source:'manual'})});if(r.ok){$('factText').value='';await loadFacts();status('Fakt oczekuje na zatwierdzenie')}else status('Błąd: '+r.status)};
 $('previewContext').onclick=async()=>{const project=$('project').value,question=$('contextQuestion').value.trim();if(!project||!question){status('Wybierz projekt i wpisz pytanie');return}const r=await api('/api/context/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project,question})});if(!r.ok){status('Błąd podglądu '+r.status);return}const x=await r.json();$('contextPreview').textContent=x.system_message||'Brak pasujących zatwierdzonych faktów.';};
@@ -288,6 +324,7 @@ function switchView(name){
   document.body.classList.remove('menu-open');
   if(name==='observability')loadMetrics();
   if(name==='models')loadModelCards();
+  if(name==='knowledge')loadKnowledge();
   if(name==='profiles')renderProfileEditor()
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
