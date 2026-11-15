@@ -237,6 +237,81 @@ async def delete_fact(project_id: str, fact_id: str):
             raise HTTPException(404,"Fact not found")
     return {"deleted":True}
 
+
+def ensure_project(db, project_id):
+    if not memory.project_exists(db,project_id):
+        raise HTTPException(404,"Project not found")
+
+@app.get("/api/knowledge", dependencies=[Depends(authenticated)])
+async def knowledge_list(project_id: str):
+    with conn() as db:
+        ensure_project(db,project_id)
+        return knowledge.list_sources(db,project_id)
+
+@app.post("/api/knowledge/paste", dependencies=[Depends(authenticated)], status_code=201)
+async def knowledge_paste(req: KnowledgePaste):
+    with conn() as db:
+        ensure_project(db,req.project_id)
+        try:
+            sid=knowledge.add(db,req.project_id,req.title,req.content,"paste")
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+    return {"id":sid,"status":"pending"}
+
+@app.post("/api/knowledge/upload", dependencies=[Depends(authenticated)], status_code=201)
+async def knowledge_upload(project_id: str = Form(...), file: UploadFile = File(...)):
+    name = (file.filename or "").split("/")[-1].split(chr(92))[-1]
+    if not name or len(name)>160:
+        raise HTTPException(422,"Nieprawidłowa nazwa pliku")
+    with conn() as db:
+        ensure_project(db,project_id)
+    raw=await file.read(knowledge.MAX_UPLOAD_BYTES+1)
+    await file.close()
+    if len(raw)>knowledge.MAX_UPLOAD_BYTES:
+        raise HTTPException(413,"Przekroczono limit 5 MB")
+    try:
+        text=knowledge.extract(name,raw)
+        with conn() as db:
+            sid=knowledge.add(db,project_id,name,text,"file")
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(422,"Nie można odczytać tekstu z pliku") from exc
+    return {"id":sid,"status":"pending"}
+
+@app.post("/api/knowledge/search", dependencies=[Depends(authenticated)])
+async def knowledge_search(req: KnowledgeSearch):
+    with conn() as db:
+        ensure_project(db,req.project_id)
+        return knowledge.retrieve(db,req.project_id,req.question,approved_only=False)
+
+@app.get("/api/knowledge/{source_id}", dependencies=[Depends(authenticated)])
+async def knowledge_get(source_id: str, project_id: str):
+    with conn() as db:
+        ensure_project(db,project_id)
+        item=knowledge.fetch_source(db,project_id,source_id)
+        if item is None:
+            raise HTTPException(404,"Knowledge source not found")
+        return item
+
+@app.patch("/api/knowledge/{source_id}", dependencies=[Depends(authenticated)])
+async def knowledge_approve(source_id: str, project_id: str, req: KnowledgeReview):
+    if req.status not in ("pending","approved"):
+        raise HTTPException(422,"Invalid status")
+    with conn() as db:
+        ensure_project(db,project_id)
+        if not knowledge.set_status(db,project_id,source_id,req.status):
+            raise HTTPException(404,"Knowledge source not found")
+    return {"id":source_id,"status":req.status}
+
+@app.delete("/api/knowledge/{source_id}", dependencies=[Depends(authenticated)])
+async def knowledge_delete(source_id: str, project_id: str):
+    with conn() as db:
+        ensure_project(db,project_id)
+        if not knowledge.remove(db,project_id,source_id):
+            raise HTTPException(404,"Knowledge source not found")
+    return {"deleted":True}
+
 @app.post("/api/context/preview", dependencies=[Depends(authenticated)])
 async def preview_context(req: ContextPreview):
     with conn() as c:
