@@ -6,11 +6,12 @@ Public open-source self-hosted AI chat gateway. UI and conversation database rem
 
 The current `main` branch includes a responsive chat-first workspace, four themes, project-memory review, a provider-status page, basic SQLite observability counters and **workspace profiles**. Profile and connection controls live in the left sidebar. See the [workspace guide](deploy/WORKSPACE.md) and [profiles guide](deploy/PROFILES.md).
 
-Profiles are personalized workspaces, **not independent authenticated accounts**. A shared gateway password protects the application; profile switching does not isolate sensitive information between different people. Provider configuration wizard, document ingestion and vector RAG are not yet implemented.
+Profiles are personalized workspaces, **not independent authenticated accounts**. A shared gateway password protects the application; profile switching does not isolate sensitive information between different people. Provider configuration wizard and vector/semantic RAG are not yet implemented. Text, Markdown, CSV, JSON, text-based PDF and DOCX ingestion is available in the Knowledge Base.
 
 ## Features
 
 - Responsive ChatGPT-inspired web UI, model selector, streaming responses
+- Project Knowledge Base: paste content or upload TXT/MD/CSV/JSON/PDF/DOCX (5 MB max), preview, approve, search and delete local sources
 - Local safe Markdown formatting in assistant answers: headings, paragraphs, emphasis, lists, links, blockquotes and fenced code blocks (also when reopening chat history)
 - SQLite chat history and chat deletion API
 - Named workspace profiles with per-profile chat lists, preferred provider, visual theme and optional answer instructions
@@ -63,10 +64,19 @@ GHCR package visibility must be changed to public separately if anonymous pulls 
 
 Project-scoped, approval-gated local memory using SQLite FTS5: select a project, propose facts, approve/reject them, and preview exactly which relevant approved notes may be sent to the chosen model. No pending facts are sent. See [context engine documentation](deploy/CONTEXT.md). Cloud providers receive the selected context with your question; use Local Only for private inference.
 
+## Knowledge Base
+
+In **Baza wiedzy**, select a project, paste text or upload a document, inspect the extracted content, and explicitly approve the source before it can appear in model context. Original files are not retained; extracted text is chunked and stored in SQLite FTS5. Only approved sources enter the prompt when project context is enabled. See [Knowledge Base guide](deploy/KNOWLEDGE.md).
+
 ## API
 
 - `GET /healthz` — basic health check
 - `GET /api/models` — configured models
+- `GET /api/knowledge?project_id=...` — project knowledge sources
+- `POST /api/knowledge/paste` — paste a document
+- `POST /api/knowledge/upload` — multipart file import
+- `POST /api/knowledge/search` — local keyword retrieval
+- `GET/PATCH/DELETE /api/knowledge/{id}?project_id=...` — preview, review and delete
 - `GET /api/chats` — history list (optional `?profile_id=...` filter)
 - `GET /api/profiles` — list profiles
 - `POST /api/profiles` — create named workspace profile
